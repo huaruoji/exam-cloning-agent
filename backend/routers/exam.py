@@ -1,110 +1,71 @@
-import os
-import json
+import random
 import uuid
+
 from fastapi import APIRouter
 from pydantic import BaseModel
-from typing import Optional
-from config import DATA_DIR
+
+from services.ingestion import get_course_profile
 from services.question_generator import generate_question
+from services.store import questions_table
 
 router = APIRouter(prefix="/api/exam", tags=["exam"])
 
 
-def _load_questions() -> list[dict]:
-    path = os.path.join(DATA_DIR, "questions.json")
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            return json.load(f)
-    return []
-
-
-def _load_style_profiles() -> list[dict]:
-    path = os.path.join(DATA_DIR, "style_profiles.json")
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            return json.load(f)
-    return []
-
-
 class ExamRequest(BaseModel):
-    num_questions: Optional[int] = 10
-    time_limit_minutes: Optional[int] = 60
+    course_id: str
+    num_questions: int | None = 10
+    time_limit_minutes: int | None = 60
 
 
 @router.post("/generate")
 async def generate_exam(request: ExamRequest):
-    """Generate a mock exam that clones the style of uploaded exams."""
-    profiles = _load_style_profiles()
-    existing = _load_questions()
+    profile = get_course_profile(request.course_id)
+    questions = [q for q in questions_table.load() if q.get("course_id") == request.course_id]
+    if not profile:
+        return {"error": "No course profile found. Upload and process course documents first."}
 
-    if not profiles:
-        return {"error": "No exam style profiles found. Upload an exam PDF first."}
+    style = profile.get("style_profile", {})
+    knowledge = profile.get("knowledge_profile", {})
+    num = min(request.num_questions or 10, 20)
+    generated = []
 
-    style = profiles[0]["style"]
-    style_desc = style.get("description", "")
     type_dist = style.get("question_type_distribution", {"short_answer": 1.0})
     diff_dist = style.get("difficulty_distribution", {"medium": 1.0})
-    topics = style.get("key_topics", [])
+    topics = knowledge.get("topics", []) or style.get("key_topics", []) or ["general"]
 
-    # Determine how many of each type
-    num = min(request.num_questions or 10, 20)
-    questions = []
+    for _ in range(num):
+        q_type = random.choices(list(type_dist.keys()), weights=list(type_dist.values()), k=1)[0]
+        difficulty = random.choices(list(diff_dist.keys()), weights=list(diff_dist.values()), k=1)[0]
+        topic = random.choice(topics)
 
-    # Mix existing and generated
-    import random
-
-    for i in range(num):
-        # Pick question type based on distribution
-        r = random.random()
-        cumulative = 0
-        q_type = "short_answer"
-        for t, p in type_dist.items():
-            cumulative += p
-            if r <= cumulative:
-                q_type = t
-                break
-
-        # Pick difficulty based on distribution
-        r = random.random()
-        cumulative = 0
-        difficulty = "medium"
-        for d, p in diff_dist.items():
-            cumulative += p
-            if r <= cumulative:
-                difficulty = d
-                break
-
-        topic = random.choice(topics) if topics else "general"
-
-        # Try existing first
         candidates = [
-            q for q in existing
+            q
+            for q in questions
             if q.get("question_type") == q_type and q.get("difficulty") == difficulty
         ]
-        if candidates and random.random() < 0.5:
-            questions.append(random.choice(candidates))
+        if candidates and random.random() < 0.6:
+            generated.append(random.choice(candidates))
         else:
-            q = await generate_question(
+            new_q = await generate_question(
                 topic=topic,
                 difficulty=difficulty,
                 question_type=q_type,
-                exam_style_description=style_desc,
+                exam_style_description=style.get("description", ""),
+                context=f"Course topics: {', '.join(topics[:15])}",
             )
-            questions.append(q)
+            new_q["course_id"] = request.course_id
+            generated.append(new_q)
 
-    exam = {
-        "id": str(uuid.uuid4())[:8],
-        "title": f"Mock Exam ({len(questions)} questions)",
+    return {
+        "id": uuid.uuid4().hex[:8],
+        "title": f"Mock Exam ({len(generated)} questions)",
         "style_profile": style,
-        "questions": questions,
+        "questions": generated,
         "time_limit_minutes": request.time_limit_minutes,
     }
 
-    return exam
-
 
 @router.get("/styles")
-async def list_styles():
-    """List all uploaded exam style profiles."""
-    profiles = _load_style_profiles()
-    return {"profiles": profiles}
+async def list_styles(course_id: str):
+    profile = get_course_profile(course_id)
+    return {"profile": profile}

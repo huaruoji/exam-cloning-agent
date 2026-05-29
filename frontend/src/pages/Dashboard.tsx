@@ -1,135 +1,142 @@
 import { useEffect, useState } from "react"
-import { api } from "@/lib/api"
+import { BookOpen, Clock3, FolderOpen, TrendingUp } from "lucide-react"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/Card"
-import { BookOpen, Target, TrendingUp, Clock } from "lucide-react"
+import { api } from "@/lib/api"
+import { useLayoutContext } from "@/hooks/useLayoutContext"
 
 interface Stats {
   total_questions_in_bank: number
   total_attempted: number
   total_correct: number
   accuracy: number
-  concept_mastery: Record<string, { score: number; concept: string }>
+  concept_mastery: Record<string, { score: number }>
   recent_accuracy: boolean[]
+  knowledge_topics: string[]
+  document_counts: Record<string, number>
 }
 
 export function Dashboard() {
+  const { selectedCourse } = useLayoutContext()
   const [stats, setStats] = useState<Stats | null>(null)
 
   useEffect(() => {
-    api.getStats().then(setStats).catch(() => {})
-  }, [])
+    if (!selectedCourse) {
+      setStats(null)
+      return
+    }
+    api.getStats(selectedCourse.id).then(setStats).catch(() => setStats(null))
+  }, [selectedCourse])
 
-  const accuracy = stats?.accuracy ?? 0
-  const attempted = stats?.total_attempted ?? 0
-  const inBank = stats?.total_questions_in_bank ?? 0
+  if (!selectedCourse) {
+    return (
+      <div>
+        <h1 className="font-serif text-3xl">Overview</h1>
+        <p className="mt-2 text-sm text-slate-muted">Create or select a course to start building a workspace.</p>
+      </div>
+    )
+  }
+
+  const statCards = [
+    { label: "Questions in bank", value: stats?.total_questions_in_bank ?? 0, icon: BookOpen },
+    { label: "Practice attempts", value: stats?.total_attempted ?? 0, icon: Clock3 },
+    { label: "Accuracy", value: `${Math.round((stats?.accuracy ?? 0) * 100)}%`, icon: TrendingUp },
+    {
+      label: "Documents ingested",
+      value: Object.values(stats?.document_counts ?? {}).reduce((sum, count) => sum + count, 0),
+      icon: FolderOpen,
+    },
+  ]
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-6">Dashboard</h1>
+      <p className="text-[11px] uppercase tracking-[0.16em] text-slate-muted">Course workspace</p>
+      <h1 className="mt-2 font-serif text-3xl">{selectedCourse.name}</h1>
+      <p className="mt-2 max-w-2xl text-sm text-slate-muted">
+        Combine past exams, written homework, slide decks, and reference PDFs into one
+        practice workspace. Parsing happens in the background, then the course profile is
+        updated automatically.
+      </p>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <Card>
-          <CardContent className="flex items-center gap-4">
-            <div className="p-2 rounded-md bg-coral/10">
-              <BookOpen size={20} className="text-coral" />
-            </div>
-            <div>
-              <p className="text-2xl font-semibold">{inBank}</p>
-              <p className="text-xs text-slate-muted">Questions in Bank</p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {statCards.map(({ label, value, icon: Icon }) => (
+          <Card key={label}>
+            <CardContent className="flex items-center gap-4">
+              <div className="rounded-xl bg-coral/10 p-3 text-coral">
+                <Icon size={18} />
+              </div>
+              <div>
+                <p className="text-2xl font-semibold">{value}</p>
+                <p className="text-xs text-slate-muted">{label}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
+      <div className="mt-8 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <Card>
-          <CardContent className="flex items-center gap-4">
-            <div className="p-2 rounded-md bg-success/10">
-              <Target size={20} className="text-success" />
-            </div>
-            <div>
-              <p className="text-2xl font-semibold">{attempted}</p>
-              <p className="text-xs text-slate-muted">Attempted</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="flex items-center gap-4">
-            <div className="p-2 rounded-md bg-warning/10">
-              <TrendingUp size={20} className="text-warning" />
-            </div>
-            <div>
-              <p className="text-2xl font-semibold">{(accuracy * 100).toFixed(0)}%</p>
-              <p className="text-xs text-slate-muted">Accuracy</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="flex items-center gap-4">
-            <div className="p-2 rounded-md bg-slate-ink/10">
-              <Clock size={20} className="text-slate-ink" />
-            </div>
-            <div>
-              <p className="text-2xl font-semibold">
-                {stats?.recent_accuracy?.length ?? 0}
+          <CardHeader>
+            <CardTitle>Topic coverage</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {stats?.knowledge_topics?.length ? (
+              <div className="flex flex-wrap gap-2">
+                {stats.knowledge_topics.map((topic) => (
+                  <span key={topic} className="rounded-full border border-border bg-ivory px-3 py-1 text-xs text-slate-ink">
+                    {topic}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-muted">
+                No parsed topics yet. Upload documents under Materials to build the knowledge profile.
               </p>
-              <p className="text-xs text-slate-muted">Recent Sessions</p>
-            </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Document mix</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {stats?.document_counts && Object.keys(stats.document_counts).length > 0 ? (
+              <div className="space-y-3">
+                {Object.entries(stats.document_counts).map(([key, value]) => (
+                  <div key={key} className="flex items-center justify-between text-sm">
+                    <span className="capitalize text-slate-muted">{key.replaceAll("_", " ")}</span>
+                    <span className="font-medium">{value}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-muted">No documents completed yet.</p>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Concept mastery */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Concept Mastery</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {stats?.concept_mastery && Object.keys(stats.concept_mastery).length > 0 ? (
-            <div className="space-y-3">
-              {Object.entries(stats.concept_mastery)
-                .sort(([, a], [, b]) => a.score - b.score)
-                .map(([concept, data]) => (
-                  <div key={concept}>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span>{concept}</span>
-                      <span className="text-slate-muted">{(data.score * 100).toFixed(0)}%</span>
-                    </div>
-                    <div className="h-2 bg-ivory-deep rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-coral rounded-full transition-all"
-                        style={{ width: `${data.score * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-            </div>
-          ) : (
-            <p className="text-sm text-slate-muted">
-              No data yet. Upload an exam PDF or start practicing to see your progress.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Recent accuracy streak */}
-      {stats?.recent_accuracy && stats.recent_accuracy.length > 0 && (
+      {stats?.concept_mastery && Object.keys(stats.concept_mastery).length > 0 && (
         <Card className="mt-4">
           <CardHeader>
-            <CardTitle>Recent Answers</CardTitle>
+            <CardTitle>Weakest concepts</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex gap-1 flex-wrap">
-              {stats.recent_accuracy.map((correct, i) => (
-                <div
-                  key={i}
-                  className={`w-3 h-3 rounded-sm ${
-                    correct ? "bg-success" : "bg-danger/60"
-                  }`}
-                />
+          <CardContent className="space-y-3">
+            {Object.entries(stats.concept_mastery)
+              .sort(([, a], [, b]) => a.score - b.score)
+              .slice(0, 6)
+              .map(([concept, data]) => (
+                <div key={concept}>
+                  <div className="mb-1 flex justify-between text-sm">
+                    <span>{concept}</span>
+                    <span className="text-slate-muted">{Math.round(data.score * 100)}%</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-ivory-deep">
+                    <div className="h-full rounded-full bg-coral" style={{ width: `${data.score * 100}%` }} />
+                  </div>
+                </div>
               ))}
-            </div>
           </CardContent>
         </Card>
       )}

@@ -1,7 +1,7 @@
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import upload, questions, practice, exam, stats
+from routers import courses, documents, exam, jobs, practice, questions, stats, upload
 
 app = FastAPI(
     title="Exam Cloning Agent",
@@ -18,6 +18,9 @@ app.add_middleware(
 )
 
 app.include_router(upload.router)
+app.include_router(courses.router)
+app.include_router(documents.router)
+app.include_router(jobs.router)
 app.include_router(questions.router)
 app.include_router(practice.router)
 app.include_router(exam.router)

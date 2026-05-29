@@ -19,6 +19,9 @@ class QuestionType(str, Enum):
 
 class Question(BaseModel):
     id: str
+    course_id: Optional[str] = None
+    source_document_id: Optional[str] = None
+    source_type: Optional[str] = None
     content: str  # supports LaTeX with $...$ and $$...$$
     question_type: QuestionType
     difficulty: Difficulty

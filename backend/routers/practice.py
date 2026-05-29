@@ -1,127 +1,118 @@
-import os
-import json
+import random
+
 from fastapi import APIRouter
 from pydantic import BaseModel
-from typing import Optional
-from config import DATA_DIR
-from services.question_generator import generate_question
+
+from models.student import StudentState
 from services.adaptive_engine import (
     get_current_difficulty,
     get_weakest_concepts,
     record_answer,
 )
-from models.student import StudentState
+from services.ingestion import get_course_profile
+from services.question_generator import generate_question
+from services.store import questions_table, student_states_table
 
 router = APIRouter(prefix="/api/practice", tags=["practice"])
 
-STATE_FILE = os.path.join(DATA_DIR, "student_state.json")
 
-
-def _load_state() -> StudentState:
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, "r") as f:
-            return StudentState(**json.load(f))
+def _load_state(course_id: str) -> StudentState:
+    payload = next((item for item in student_states_table.load() if item["course_id"] == course_id), None)
+    if payload:
+        return StudentState(**payload["state"])
     return StudentState()
 
 
-def _save_state(state: StudentState):
-    with open(STATE_FILE, "w") as f:
-        json.dump(state.model_dump(), f, ensure_ascii=False, indent=2, default=str)
+def _save_state(course_id: str, state: StudentState):
+    rows = student_states_table.load()
+    found = False
+    for row in rows:
+        if row["course_id"] == course_id:
+            row["state"] = state.model_dump(mode="json")
+            found = True
+            break
+    if not found:
+        rows.append({"course_id": course_id, "state": state.model_dump(mode="json")})
+    student_states_table.save(rows)
 
 
-def _load_questions() -> list[dict]:
-    path = os.path.join(DATA_DIR, "questions.json")
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            return json.load(f)
-    return []
-
-
-def _load_style_profiles() -> list[dict]:
-    path = os.path.join(DATA_DIR, "style_profiles.json")
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            return json.load(f)
-    return []
+class PracticeRequest(BaseModel):
+    course_id: str
 
 
 class AnswerSubmission(BaseModel):
+    course_id: str
     question_id: str
     answer: str
-    concept: Optional[str] = None
-    correct: Optional[bool] = None  # for manual grading of open-ended
+    concept: str | None = None
+    correct: bool | None = None
 
 
 @router.post("/next")
-async def get_next_question():
-    """Get the next adaptive practice question."""
-    state = _load_state()
-    questions = _load_questions()
-    profiles = _load_style_profiles()
+async def get_next_question(request: PracticeRequest):
+    course_id = request.course_id
+    state = _load_state(course_id)
+    questions = [q for q in questions_table.load() if q.get("course_id") == course_id]
+    profile = get_course_profile(course_id)
 
-    # Determine difficulty and topic
     difficulty = get_current_difficulty(state)
     weak_concepts = get_weakest_concepts(state, n=3)
 
-    # Try to find an existing question that matches
-    import random
-
     candidates = [
-        q for q in questions
+        q
+        for q in questions
         if q.get("difficulty") == difficulty
         and (not weak_concepts or q.get("topic") in weak_concepts)
     ]
-
     if candidates:
         question = random.choice(candidates)
         return {"source": "bank", "question": question}
 
-    # Generate a new question
-    topic = weak_concepts[0] if weak_concepts else "general"
-    style_desc = profiles[0]["style"]["description"] if profiles else ""
+    style = (profile or {}).get("style_profile", {})
+    knowledge = (profile or {}).get("knowledge_profile", {})
     question_type = "short_answer"
+    dist = style.get("question_type_distribution", {})
+    if dist:
+        question_type = max(dist, key=dist.get)
 
-    if profiles:
-        dist = profiles[0]["style"].get("question_type_distribution", {})
-        if dist:
-            question_type = max(dist, key=dist.get)
-
+    topics = weak_concepts or knowledge.get("topics", []) or ["general"]
     question = await generate_question(
-        topic=topic,
+        topic=random.choice(topics),
         difficulty=difficulty,
         question_type=question_type,
-        exam_style_description=style_desc,
+        exam_style_description=style.get("description", ""),
+        context=f"Course topics: {', '.join(knowledge.get('topics', [])[:15])}",
     )
-
+    question["course_id"] = course_id
     return {"source": "generated", "question": question}
 
 
 @router.post("/answer")
 async def submit_answer(submission: AnswerSubmission):
-    """Submit an answer and update student state."""
-    state = _load_state()
-
-    # Find the question to get its topic
-    questions = _load_questions()
-    question = next((q for q in questions if q.get("id") == submission.question_id), None)
+    state = _load_state(submission.course_id)
+    question = next(
+        (
+            q
+            for q in questions_table.load()
+            if q.get("id") == submission.question_id and q.get("course_id") == submission.course_id
+        ),
+        None,
+    )
 
     concept = submission.concept or (question.get("topic", "general") if question else "general")
     correct = submission.correct
-
-    # For MCQ, auto-grade
     if correct is None and question:
         if question.get("question_type") == "mcq":
             correct = submission.answer.strip().upper() == question.get("answer", "").strip().upper()
         elif question.get("question_type") == "true_false":
             correct = submission.answer.strip().lower() == question.get("answer", "").strip().lower()
         else:
-            correct = False  # default for ungraded
-
+            correct = False
     if correct is None:
         correct = False
 
     state = record_answer(state, concept, correct)
-    _save_state(state)
+    _save_state(submission.course_id, state)
 
     return {
         "correct": correct,

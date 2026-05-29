@@ -4,11 +4,13 @@ AI-powered exam preparation tool: upload past exam PDFs, analyze exam style, and
 
 ## Features
 
-- **PDF Parsing** — Upload past exam PDFs, AI extracts and structures all questions
-- **Exam Style Cloning** — Analyzes question types, difficulty distribution, and topic coverage
-- **Adaptive Practice** — Questions adjust difficulty based on your performance (SM-2 algorithm)
-- **Mock Exam** — Generate full mock exams that match the original exam style
-- **Knowledge Tracking** — Concept-level mastery tracking with spaced repetition scheduling
+- **Course workspaces** — Organize materials by course instead of mixing all uploads together
+- **Async ingestion jobs** — Upload first, parse in the background, track progress in the UI
+- **Typed materials** — Distinguish `past_exam`, `homework`, `slides`, and `reference_pdf`
+- **Exam style cloning** — Build a style profile mainly from exams and homework
+- **Adaptive practice** — Questions adjust difficulty based on your performance (SM-2 algorithm)
+- **Mock exam** — Generate full mock exams that match the course profile
+- **Knowledge tracking** — Concept-level mastery tracking with spaced repetition scheduling
 
 ## Tech Stack
 
@@ -78,8 +80,12 @@ exam-cloning-agent/
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/api/upload` | Upload PDF, parse questions |
-| GET | `/api/questions` | List questions (with filters) |
-| POST | `/api/practice/next` | Get next adaptive question |
+| POST | `/api/uploads` | Upload a course document and queue background parsing |
+| GET | `/api/courses` | List course workspaces |
+| GET | `/api/documents` | List course documents |
+| GET | `/api/jobs` | Poll background parsing jobs |
+| GET | `/api/questions` | List course questions (with filters) |
+| POST | `/api/practice/next` | Get next adaptive question for a course |
 | POST | `/api/practice/answer` | Submit answer, update mastery |
 | POST | `/api/exam/generate` | Generate mock exam |
 | GET | `/api/stats` | Learning statistics |

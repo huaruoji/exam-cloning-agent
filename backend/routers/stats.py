@@ -1,39 +1,27 @@
-import os
-import json
-from fastapi import APIRouter
-from config import DATA_DIR
+from fastapi import APIRouter, Query
+
+from services.ingestion import get_course_profile
+from services.store import questions_table, student_states_table
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
-STATE_FILE = os.path.join(DATA_DIR, "student_state.json")
-
 
 @router.get("")
-async def get_stats():
-    """Get learning statistics."""
-    # Load student state
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, "r") as f:
-            state = json.load(f)
-    else:
-        state = {}
+async def get_stats(course_id: str = Query(...)):
+    state_row = next((row for row in student_states_table.load() if row["course_id"] == course_id), None)
+    state = (state_row or {}).get("state", {})
+    questions = [q for q in questions_table.load() if q.get("course_id") == course_id]
+    profile = get_course_profile(course_id) or {}
 
-    # Load questions count
-    questions_path = os.path.join(DATA_DIR, "questions.json")
-    total_questions = 0
-    if os.path.exists(questions_path):
-        with open(questions_path, "r") as f:
-            total_questions = len(json.load(f))
-
+    attempted = state.get("total_questions_attempted", 0)
+    correct = state.get("total_correct", 0)
     return {
-        "total_questions_in_bank": total_questions,
-        "total_attempted": state.get("total_questions_attempted", 0),
-        "total_correct": state.get("total_correct", 0),
-        "accuracy": (
-            state.get("total_correct", 0) / state.get("total_questions_attempted", 1)
-            if state.get("total_questions_attempted", 0) > 0
-            else 0
-        ),
+        "total_questions_in_bank": len(questions),
+        "total_attempted": attempted,
+        "total_correct": correct,
+        "accuracy": correct / attempted if attempted else 0,
         "concept_mastery": state.get("concept_mastery", {}),
         "recent_accuracy": state.get("recent_accuracy", []),
+        "knowledge_topics": profile.get("knowledge_profile", {}).get("topics", []),
+        "document_counts": profile.get("knowledge_profile", {}).get("document_counts", {}),
     }

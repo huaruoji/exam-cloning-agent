@@ -1,14 +1,17 @@
 import { useState } from "react"
-import { api } from "@/lib/api"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/Card"
+import { ArrowRight, CheckCircle, Loader2, XCircle } from "lucide-react"
+
 import { Button } from "@/components/Button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/Card"
 import { MathRenderer } from "@/components/MathRenderer"
-import { Loader2, CheckCircle, XCircle, ArrowRight } from "lucide-react"
+import { useLayoutContext } from "@/hooks/useLayoutContext"
+import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
 export function Practice() {
+  const { selectedCourse } = useLayoutContext()
   const [question, setQuestion] = useState<any>(null)
-  const [source, setSource] = useState<string>("")
+  const [source, setSource] = useState("")
   const [answer, setAnswer] = useState("")
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
   const [result, setResult] = useState<any>(null)
@@ -16,29 +19,32 @@ export function Practice() {
   const [submitting, setSubmitting] = useState(false)
 
   const loadNext = async () => {
+    if (!selectedCourse) return
     setLoading(true)
     setResult(null)
     setAnswer("")
     setSelectedOption(null)
     try {
-      const res = await api.getNextQuestion()
+      const res = await api.getNextQuestion(selectedCourse.id)
       setQuestion(res.question)
       setSource(res.source)
-    } catch (e: any) {
-      setQuestion(null)
     } finally {
       setLoading(false)
     }
   }
 
   const submit = async () => {
-    if (!question) return
+    if (!question || !selectedCourse) return
     const finalAnswer = question.question_type === "mcq" ? (selectedOption || "") : answer
     if (!finalAnswer.trim()) return
 
     setSubmitting(true)
     try {
-      const res = await api.submitAnswer(question.id, finalAnswer)
+      const res = await api.submitAnswer({
+        courseId: selectedCourse.id,
+        questionId: question.id,
+        answer: finalAnswer,
+      })
       setResult(res)
     } catch {
       setResult({ correct: false })
@@ -47,141 +53,129 @@ export function Practice() {
     }
   }
 
+  if (!selectedCourse) {
+    return (
+      <div>
+        <h1 className="font-serif text-3xl">Practice</h1>
+        <p className="mt-2 text-sm text-slate-muted">Select a course to start adaptive practice.</p>
+      </div>
+    )
+  }
+
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-2">Practice</h1>
-      <p className="text-sm text-slate-muted mb-6">
-        Adaptive practice — questions adjust to your mastery level.
+      <h1 className="font-serif text-3xl">Practice</h1>
+      <p className="mt-2 text-sm text-slate-muted">
+        Generate questions from the course profile for <span className="text-slate-ink">{selectedCourse.name}</span>.
       </p>
 
       {!question && !loading && (
-        <Card>
-          <CardContent className="text-center py-12">
-            <p className="text-sm text-slate-muted mb-4">
-              Ready to practice? The AI will select questions based on your weak areas.
-            </p>
-            <Button variant="coral" onClick={loadNext}>
-              Start Practice Session
-            </Button>
+        <Card className="mt-6">
+          <CardContent className="py-12 text-center">
+            <p className="mb-4 text-sm text-slate-muted">Start an adaptive session based on weak topics and the current style profile.</p>
+            <Button variant="coral" onClick={loadNext}>Start practice</Button>
           </CardContent>
         </Card>
       )}
 
       {loading && (
-        <Card>
-          <CardContent className="text-center py-12">
-            <Loader2 size={24} className="animate-spin mx-auto mb-3 text-coral" />
-            <p className="text-sm text-slate-muted">Generating question...</p>
+        <Card className="mt-6">
+          <CardContent className="py-12 text-center">
+            <Loader2 size={24} className="mx-auto mb-3 animate-spin text-coral" />
+            <p className="text-sm text-slate-muted">Building the next question...</p>
           </CardContent>
         </Card>
       )}
 
       {question && !loading && (
-        <Card>
+        <Card className="mt-6">
           <CardHeader>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 text-xs">
               <span className={cn(
-                "text-xs px-2 py-0.5 rounded",
+                "rounded px-2 py-0.5",
                 question.difficulty === "easy" && "bg-success/10 text-success",
                 question.difficulty === "medium" && "bg-warning/10 text-warning",
                 question.difficulty === "hard" && "bg-danger/10 text-danger",
               )}>
                 {question.difficulty}
               </span>
-              <span className="text-xs text-slate-muted">{question.topic}</span>
-              {source === "generated" && (
-                <span className="text-xs text-coral ml-auto">AI Generated</span>
-              )}
+              <span className="text-slate-muted">{question.topic}</span>
+              {source === "generated" && <span className="ml-auto text-coral">AI generated</span>}
             </div>
-            <CardTitle className="mt-2">
+            <CardTitle className="mt-2 text-xl">
               <MathRenderer content={question.content} />
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {/* MCQ options */}
-            {question.question_type === "mcq" && question.options && (
-              <div className="space-y-2 mb-6">
-                {question.options.map((opt: string, i: number) => {
-                  const isSelected = selectedOption === opt
-                  const isCorrect = result && opt === question.answer
+            {question.question_type === "mcq" && question.options?.length ? (
+              <div className="mb-6 space-y-2">
+                {question.options.map((option: string, index: number) => {
+                  const isSelected = selectedOption === option
+                  const isCorrect = result && option === question.answer
                   const isWrong = result && isSelected && !result.correct
                   return (
                     <button
-                      key={i}
-                      onClick={() => !result && setSelectedOption(opt)}
+                      key={index}
+                      onClick={() => !result && setSelectedOption(option)}
                       disabled={!!result}
                       className={cn(
-                        "w-full text-left p-3 rounded-md border text-sm transition-colors",
+                        "w-full rounded-xl border p-3 text-left text-sm transition-colors",
                         !result && isSelected && "border-coral bg-coral/5",
                         !result && !isSelected && "border-border hover:border-slate-muted",
                         isCorrect && "border-success bg-success/5",
-                        isWrong && "border-danger bg-danger/5",
-                        result && !isCorrect && !isWrong && "border-border opacity-50",
+                        isWrong && "border-danger bg-danger/5"
                       )}
                     >
-                      <MathRenderer content={opt} />
+                      <MathRenderer content={option} />
                     </button>
                   )
                 })}
               </div>
-            )}
-
-            {/* Short answer / calculation input */}
-            {question.question_type !== "mcq" && !result && (
+            ) : !result ? (
               <textarea
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
-                placeholder="Type your answer here..."
-                className="w-full p-3 rounded-md border border-border bg-ivory-card text-sm min-h-[120px] resize-y mb-4 focus:outline-none focus:ring-2 focus:ring-coral/30"
+                className="mb-4 min-h-[120px] w-full rounded-xl border border-border bg-ivory px-4 py-3 text-sm outline-none"
+                placeholder="Type your answer..."
               />
-            )}
+            ) : null}
 
-            {/* Actions */}
             {!result && (
-              <div className="flex gap-3">
-                <Button variant="coral" onClick={submit} disabled={submitting || (!selectedOption && !answer.trim())}>
-                  {submitting ? <Loader2 size={16} className="animate-spin" /> : "Submit Answer"}
-                </Button>
-              </div>
+              <Button variant="coral" onClick={submit} disabled={submitting || (!selectedOption && !answer.trim())}>
+                {submitting ? <Loader2 size={16} className="animate-spin" /> : "Submit answer"}
+              </Button>
             )}
 
-            {/* Result feedback */}
             {result && (
               <div className={cn(
-                "p-4 rounded-md mt-4",
-                result.correct ? "bg-success/5 border border-success/20" : "bg-danger/5 border border-danger/20"
+                "mt-5 rounded-xl border p-4",
+                result.correct ? "border-success/20 bg-success/5" : "border-danger/20 bg-danger/5"
               )}>
-                <div className="flex items-center gap-2 mb-2">
-                  {result.correct ? (
-                    <CheckCircle size={18} className="text-success" />
-                  ) : (
-                    <XCircle size={18} className="text-danger" />
-                  )}
-                  <span className="font-medium text-sm">
-                    {result.correct ? "Correct!" : "Incorrect"}
-                  </span>
+                <div className="mb-2 flex items-center gap-2">
+                  {result.correct ? <CheckCircle size={18} className="text-success" /> : <XCircle size={18} className="text-danger" />}
+                  <span className="text-sm font-medium">{result.correct ? "Correct" : "Needs review"}</span>
                 </div>
                 {!result.correct && question.answer && (
-                  <div className="mt-2">
-                    <p className="text-xs font-medium text-slate-muted mb-1">Correct Answer</p>
-                    <p className="text-sm"><MathRenderer content={question.answer} /></p>
+                  <div className="mb-3 text-sm">
+                    <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">Answer</p>
+                    <MathRenderer content={question.answer} />
                   </div>
                 )}
                 {question.explanation && (
-                  <div className="mt-3 pt-3 border-t border-border">
-                    <p className="text-xs font-medium text-slate-muted mb-1">Explanation</p>
-                    <p className="text-sm"><MathRenderer content={question.explanation} /></p>
+                  <div className="text-sm">
+                    <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">Explanation</p>
+                    <MathRenderer content={question.explanation} />
                   </div>
                 )}
-                <div className="mt-3 text-xs text-slate-muted">
-                  Mastery: {(result.mastery_score * 100).toFixed(0)}% | Overall: {(result.overall_accuracy * 100).toFixed(0)}%
-                </div>
+                <p className="mt-3 text-xs text-slate-muted">
+                  Mastery {Math.round(result.mastery_score * 100)}% · Overall {Math.round(result.overall_accuracy * 100)}%
+                </p>
               </div>
             )}
 
             {result && (
               <Button variant="outline" className="mt-4" onClick={loadNext}>
-                Next Question <ArrowRight size={16} />
+                Next question <ArrowRight size={16} />
               </Button>
             )}
           </CardContent>

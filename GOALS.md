@@ -1,6 +1,6 @@
 # GOALS — Exam Cloning Agent
 
-## Status: Initial scaffold complete
+## Status: v0.2 course-workspace refactor complete
 
 ## Progress
 
@@ -10,8 +10,11 @@
 - [x] Frontend: React + Vite + Tailwind v4 + Claude design system
 - [x] Frontend: All 5 pages (Dashboard, Upload, QuestionBank, Practice, MockExam)
 - [x] Frontend: MathRenderer (KaTeX), Layout with sidebar
-- [ ] Backend: uv sync + test imports
-- [ ] Frontend: npm run build (verify no errors)
+- [x] Add course workspaces
+- [x] Add document types and async parsing jobs
+- [x] Refactor UI to lighter Anthropic-inspired sidebar
+- [x] Backend: uv sync + test imports
+- [x] Frontend: npm run build (verify no errors)
 - [ ] Docker: Dockerfile + docker-compose.yml
 - [ ] End-to-end test: upload a PDF and verify parsing
 - [ ] Polish: error handling, loading states, edge cases
