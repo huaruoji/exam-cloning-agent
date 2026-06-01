@@ -114,6 +114,14 @@ export const api = {
         time_limit_minutes: payload.timeLimit,
       }),
     }),
+  submitExam: (courseId: string, answers: { question_id: string; answer: string }[]) =>
+    request<{ total: number; correct_count: number; accuracy: number; results: { question_id: string; correct: boolean; feedback: string; correct_answer: string; explanation: string }[] }>(
+      "/exam/submit",
+      {
+        method: "POST",
+        body: JSON.stringify({ course_id: courseId, answers }),
+      }
+    ),
   getExamStyle: (courseId: string) => request<{ profile: any }>(`/exam/styles?course_id=${courseId}`),
 
   getStats: (courseId: string) =>

@@ -1,11 +1,12 @@
 import { useState } from "react"
-import { ChevronLeft, ChevronRight, Clock, Loader2 } from "lucide-react"
+import { CheckCircle, ChevronLeft, ChevronRight, Clock, Loader2, XCircle } from "lucide-react"
 
 import { Button } from "@/components/Button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/Card"
 import { MathRenderer } from "@/components/MathRenderer"
 import { useLayoutContext } from "@/hooks/useLayoutContext"
 import { api } from "@/lib/api"
+import { cn } from "@/lib/utils"
 
 export function MockExam() {
   const { selectedCourse } = useLayoutContext()
@@ -14,6 +15,13 @@ export function MockExam() {
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [generating, setGenerating] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [examResults, setExamResults] = useState<{
+    total: number
+    correct_count: number
+    accuracy: number
+    results: { question_id: string; correct: boolean; feedback: string; correct_answer: string; explanation: string }[]
+  } | null>(null)
 
   const generate = async () => {
     if (!selectedCourse) return
@@ -24,8 +32,27 @@ export function MockExam() {
       setCurrentIndex(0)
       setAnswers({})
       setSubmitted(false)
+      setExamResults(null)
     } finally {
       setGenerating(false)
+    }
+  }
+
+  const handleSubmit = async () => {
+    if (!selectedCourse || !exam) return
+    setSubmitting(true)
+    try {
+      const answerList = Object.entries(answers).map(([idx, answer]) => ({
+        question_id: exam.questions[parseInt(idx)].id,
+        answer,
+      }))
+      const result = await api.submitExam(selectedCourse.id, answerList)
+      setExamResults(result)
+      setSubmitted(true)
+    } catch {
+      setSubmitted(true)
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -69,23 +96,62 @@ export function MockExam() {
   if (submitted) {
     return (
       <div>
-        <h1 className="font-serif text-3xl">Mock Exam complete</h1>
-        <p className="mt-2 text-sm text-slate-muted">You answered {Object.keys(answers).length} of {total} questions.</p>
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Answer map</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {exam.questions.map((q: any, index: number) => (
-              <div key={index} className="rounded-xl border border-border bg-ivory px-4 py-3 text-sm">
-                <p className="text-xs uppercase tracking-[0.12em] text-slate-muted">Question {index + 1}</p>
-                <div className="mt-1 line-clamp-2"><MathRenderer content={q.content} /></div>
-                {answers[index] ? <p className="mt-2 text-xs text-coral">Your answer saved.</p> : <p className="mt-2 text-xs text-slate-muted">No answer entered.</p>}
+        <h1 className="font-serif text-3xl">Mock Exam Results</h1>
+        {examResults ? (
+          <>
+            <div className="mt-4 flex items-center gap-6">
+              <div className="text-center">
+                <p className="text-3xl font-semibold">{examResults.correct_count}/{examResults.total}</p>
+                <p className="text-xs text-slate-muted">Correct</p>
               </div>
-            ))}
-            <Button variant="outline" onClick={generate}>Generate another paper</Button>
-          </CardContent>
-        </Card>
+              <div className="text-center">
+                <p className="text-3xl font-semibold">{Math.round(examResults.accuracy * 100)}%</p>
+                <p className="text-xs text-slate-muted">Accuracy</p>
+              </div>
+            </div>
+
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Question-by-question results</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {examResults.results.map((result, index) => {
+                  const question = exam.questions[index]
+                  return (
+                    <div key={index} className={cn(
+                      "rounded-xl border p-4",
+                      result.correct ? "border-success/20 bg-success/5" : "border-danger/20 bg-danger/5"
+                    )}>
+                      <div className="flex items-start gap-3">
+                        {result.correct ? (
+                          <CheckCircle size={18} className="mt-0.5 shrink-0 text-success" />
+                        ) : (
+                          <XCircle size={18} className="mt-0.5 shrink-0 text-danger" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-slate-muted">Q{index + 1}</p>
+                          <div className="mt-1 text-sm"><MathRenderer content={question.content} /></div>
+                          {answers[index] && (
+                            <p className="mt-2 text-xs"><span className="text-slate-muted">Your answer:</span> {answers[index]}</p>
+                          )}
+                          {result.feedback && (
+                            <p className="mt-1 text-xs text-slate-muted">{result.feedback}</p>
+                          )}
+                          {!result.correct && result.correct_answer && (
+                            <p className="mt-1 text-xs"><span className="text-slate-muted">Expected:</span> {result.correct_answer}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <p className="mt-2 text-sm text-slate-muted">You answered {Object.keys(answers).length} of {total} questions.</p>
+        )}
+        <Button variant="outline" className="mt-4" onClick={generate}>Generate another paper</Button>
       </div>
     )
   }
@@ -156,7 +222,9 @@ export function MockExam() {
               <ChevronLeft size={16} /> Previous
             </Button>
             {currentIndex === total - 1 ? (
-              <Button variant="coral" size="sm" onClick={() => setSubmitted(true)}>Submit exam</Button>
+              <Button variant="coral" size="sm" onClick={handleSubmit} disabled={submitting}>
+                {submitting ? <Loader2 size={16} className="animate-spin" /> : "Submit exam"}
+              </Button>
             ) : (
               <Button variant="outline" size="sm" onClick={() => setCurrentIndex((value) => Math.min(total - 1, value + 1))}>
                 Next <ChevronRight size={16} />
