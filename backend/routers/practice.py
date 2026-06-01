@@ -10,6 +10,7 @@ from services.adaptive_engine import (
     record_answer,
 )
 from services.ingestion import get_course_profile
+from services.llm_client import grade_answer
 from services.question_generator import generate_question
 from services.store import questions_table, student_states_table
 
@@ -84,6 +85,13 @@ async def get_next_question(request: PracticeRequest):
         context=f"Course topics: {', '.join(knowledge.get('topics', [])[:15])}",
     )
     question["course_id"] = course_id
+    question["source_type"] = "generated"
+
+    # Persist generated question so it can be looked up later
+    all_questions = questions_table.load()
+    all_questions.append(question)
+    questions_table.save(all_questions)
+
     return {"source": "generated", "question": question}
 
 
@@ -101,13 +109,24 @@ async def submit_answer(submission: AnswerSubmission):
 
     concept = submission.concept or (question.get("topic", "general") if question else "general")
     correct = submission.correct
+    feedback = ""
+
     if correct is None and question:
-        if question.get("question_type") == "mcq":
+        qtype = question.get("question_type", "")
+        if qtype == "mcq":
             correct = submission.answer.strip().upper() == question.get("answer", "").strip().upper()
-        elif question.get("question_type") == "true_false":
+        elif qtype == "true_false":
             correct = submission.answer.strip().lower() == question.get("answer", "").strip().lower()
         else:
-            correct = False
+            # LLM-based grading for short_answer, calculation, essay
+            grading = await grade_answer(
+                question_content=question.get("content", ""),
+                correct_answer=question.get("answer", ""),
+                student_answer=submission.answer,
+                explanation=question.get("explanation", ""),
+            )
+            correct = grading["correct"]
+            feedback = grading["feedback"]
     if correct is None:
         correct = False
 
@@ -117,6 +136,9 @@ async def submit_answer(submission: AnswerSubmission):
     return {
         "correct": correct,
         "concept": concept,
+        "feedback": feedback,
+        "explanation": question.get("explanation", "") if question else "",
+        "correct_answer": question.get("answer", "") if question else "",
         "mastery_score": state.concept_mastery[concept].score if concept in state.concept_mastery else 0.5,
         "overall_accuracy": state.total_correct / state.total_questions_attempted if state.total_questions_attempted > 0 else 0,
     }

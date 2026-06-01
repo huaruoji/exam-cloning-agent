@@ -8,6 +8,7 @@ class ConceptMastery(BaseModel):
     score: float = 0.5
     total_attempts: int = 0
     correct_attempts: int = 0
+    consecutive_correct: int = 0
     last_reviewed: Optional[datetime] = None
     next_review: Optional[datetime] = None
     stability: float = 1.0

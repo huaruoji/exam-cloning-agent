@@ -92,7 +92,7 @@ export const api = {
       body: JSON.stringify({ course_id: courseId }),
     }),
   submitAnswer: (payload: { courseId: string; questionId: string; answer: string; correct?: boolean }) =>
-    request<{ correct: boolean; concept: string; mastery_score: number; overall_accuracy: number }>(
+    request<{ correct: boolean; concept: string; feedback: string; explanation: string; correct_answer: string; mastery_score: number; overall_accuracy: number }>(
       "/practice/answer",
       {
         method: "POST",

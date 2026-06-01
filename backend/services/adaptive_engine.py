@@ -51,7 +51,7 @@ def update_mastery(
 
     new_interval, new_ease, new_reps = sm2_schedule(
         quality,
-        mastery.total_attempts - mastery.correct_attempts if not correct else mastery.correct_attempts,
+        mastery.consecutive_correct,
         mastery.difficulty / 10.0 * 2 + 1.3,  # map difficulty to ease
         max(1, (mastery.next_review - mastery.last_reviewed).days) if mastery.next_review and mastery.last_reviewed else 1,
     )
@@ -59,6 +59,9 @@ def update_mastery(
     mastery.total_attempts += 1
     if correct:
         mastery.correct_attempts += 1
+        mastery.consecutive_correct = new_reps
+    else:
+        mastery.consecutive_correct = 0
     mastery.score = mastery.correct_attempts / mastery.total_attempts if mastery.total_attempts > 0 else 0.5
     mastery.last_reviewed = datetime.now()
     mastery.next_review = datetime.now() + timedelta(days=new_interval)

@@ -155,16 +155,25 @@ export function Practice() {
                   {result.correct ? <CheckCircle size={18} className="text-success" /> : <XCircle size={18} className="text-danger" />}
                   <span className="text-sm font-medium">{result.correct ? "Correct" : "Needs review"}</span>
                 </div>
-                {!result.correct && question.answer && (
-                  <div className="mb-3 text-sm">
-                    <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">Answer</p>
-                    <MathRenderer content={question.answer} />
+
+                {/* LLM feedback for free-form answers */}
+                {result.feedback && (
+                  <div className="mb-3 rounded-lg bg-ivory px-3 py-2 text-sm">
+                    <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">Grader feedback</p>
+                    <p>{result.feedback}</p>
                   </div>
                 )}
-                {question.explanation && (
+
+                {!result.correct && result.correct_answer && (
+                  <div className="mb-3 text-sm">
+                    <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">Expected answer</p>
+                    <MathRenderer content={result.correct_answer} />
+                  </div>
+                )}
+                {result.explanation && (
                   <div className="text-sm">
                     <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">Explanation</p>
-                    <MathRenderer content={question.explanation} />
+                    <MathRenderer content={result.explanation} />
                   </div>
                 )}
                 <p className="mt-3 text-xs text-slate-muted">

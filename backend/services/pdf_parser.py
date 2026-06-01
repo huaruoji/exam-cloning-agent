@@ -73,16 +73,27 @@ Rules:
 - Return ONLY valid JSON array, no markdown code blocks."""
 
     user_prompt = f"Parse the following educational document text into structured questions:\n\n{text[:12000]}"
-    result = await call_llm(system_prompt, user_prompt, temperature=0.2)
-    result = _strip_json_fence(result)
 
-    try:
-        questions = json.loads(result)
-    except json.JSONDecodeError:
+    # Retry up to 2 times on parse failure
+    for attempt in range(3):
+        result = await call_llm(system_prompt, user_prompt, temperature=0.2 if attempt == 0 else 0.1)
+        result = _strip_json_fence(result)
+
+        try:
+            questions = json.loads(result)
+            if isinstance(questions, list):
+                break
+        except json.JSONDecodeError:
+            if attempt == 2:
+                return []  # Final attempt failed
+            continue
+    else:
         return []
 
     normalized: list[dict] = []
     for q in questions:
+        if not isinstance(q, dict) or "content" not in q:
+            continue
         q["id"] = str(uuid.uuid4())[:8]
         q["source_pdf"] = source_pdf
         q["source_document_id"] = source_document_id

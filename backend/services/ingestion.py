@@ -19,7 +19,8 @@ from services.store import (
     questions_table,
 )
 
-
+MAX_CONCURRENT_JOBS = 3
+_job_semaphore = asyncio.Semaphore(MAX_CONCURRENT_JOBS)
 active_tasks: dict[str, asyncio.Task] = {}
 
 
@@ -116,73 +117,79 @@ def _aggregate_course_profile(course_id: str):
 
 
 async def process_document_job(job_id: str):
-    jobs = jobs_table.load()
-    job = next(j for j in jobs if j["id"] == job_id)
-    document_id = job["document_id"]
-    documents = documents_table.load()
-    document = next(d for d in documents if d["id"] == document_id)
+    async with _job_semaphore:
+        jobs = jobs_table.load()
+        job = next(j for j in jobs if j["id"] == job_id)
+        document_id = job["document_id"]
+        documents = documents_table.load()
+        document = next(d for d in documents if d["id"] == document_id)
 
-    try:
-        _update_job(job_id, status=JobStatus.RUNNING, stage=JobStage.EXTRACTING_TEXT, progress=5, message="Opening PDF")
-        _update_document(document_id, status=DocumentStatus.PROCESSING)
+        try:
+            _update_job(job_id, status=JobStatus.RUNNING, stage=JobStage.EXTRACTING_TEXT, progress=5, message="Opening PDF")
+            _update_document(document_id, status=DocumentStatus.PROCESSING)
 
-        pages = await extract_pages_from_pdf(document["file_path"])
-        detected_name = detect_course_name(document["title"], pages)
-        _update_document(document_id, detected_course_name=detected_name, page_count=len(pages))
-        _update_job(job_id, progress=25, message=f"Extracted {len(pages)} pages")
+            pages = await extract_pages_from_pdf(document["file_path"])
+            detected_name = detect_course_name(document["title"], pages)
+            _update_document(document_id, detected_course_name=detected_name, page_count=len(pages))
+            _update_job(job_id, progress=25, message=f"Extracted {len(pages)} pages")
 
-        _update_job(job_id, stage=JobStage.PARSING_QUESTIONS, progress=35, message="Parsing question structure")
-        parsed_questions = await parse_questions_from_pages(
-            pages=pages,
-            source_pdf=document["original_filename"],
-            source_document_id=document_id,
-            course_id=document["course_id"],
-            source_type=document["document_type"],
-        )
+            _update_job(job_id, stage=JobStage.PARSING_QUESTIONS, progress=35, message="Parsing question structure")
+            parsed_questions = await parse_questions_from_pages(
+                pages=pages,
+                source_pdf=document["original_filename"],
+                source_document_id=document_id,
+                course_id=document["course_id"],
+                source_type=document["document_type"],
+            )
 
-        _update_job(job_id, stage=JobStage.ANALYZING_STYLE, progress=70, message="Aggregating style profile")
-        style_source_questions = [
-            q for q in parsed_questions if document["document_type"] in {DocumentType.PAST_EXAM.value, DocumentType.HOMEWORK.value}
-        ]
-        style_profile = await analyze_exam_style(style_source_questions or parsed_questions)
+            _update_job(job_id, stage=JobStage.ANALYZING_STYLE, progress=70, message="Aggregating style profile")
+            style_source_questions = [
+                q for q in parsed_questions if document["document_type"] in {DocumentType.PAST_EXAM.value, DocumentType.HOMEWORK.value}
+            ]
+            style_profile = await analyze_exam_style(style_source_questions or parsed_questions)
 
-        _append_questions(parsed_questions)
+            _append_questions(parsed_questions)
 
-        _update_document(document_id, status=DocumentStatus.COMPLETED)
-        _update_job(job_id, stage=JobStage.INDEXING_MATERIALS, progress=85, message="Updating course profile")
-        _aggregate_course_profile(document["course_id"])
+            # Warn if no questions were parsed
+            warning = ""
+            if not parsed_questions:
+                warning = " Warning: 0 questions were extracted. The document may not contain parseable questions."
 
-        profiles = profiles_table.load()
-        for profile in profiles:
-            if profile["course_id"] == document["course_id"]:
-                profile.setdefault("document_profiles", []).append(
-                    {
-                        "document_id": document_id,
-                        "document_type": document["document_type"],
-                        "style_profile": style_profile,
-                    }
-                )
-                break
-        profiles_table.save(profiles)
-        _update_job(
-            job_id,
-            status=JobStatus.COMPLETED,
-            stage=JobStage.COMPLETED,
-            progress=100,
-            message=f"Completed: {len(parsed_questions)} questions parsed",
-        )
-    except Exception as exc:
-        _update_document(document_id, status=DocumentStatus.FAILED)
-        _update_job(
-            job_id,
-            status=JobStatus.FAILED,
-            stage=JobStage.FAILED,
-            progress=100,
-            message="Processing failed",
-            error=str(exc),
-        )
-    finally:
-        active_tasks.pop(job_id, None)
+            _update_document(document_id, status=DocumentStatus.COMPLETED)
+            _update_job(job_id, stage=JobStage.INDEXING_MATERIALS, progress=85, message="Updating course profile")
+            _aggregate_course_profile(document["course_id"])
+
+            profiles = profiles_table.load()
+            for profile in profiles:
+                if profile["course_id"] == document["course_id"]:
+                    profile.setdefault("document_profiles", []).append(
+                        {
+                            "document_id": document_id,
+                            "document_type": document["document_type"],
+                            "style_profile": style_profile,
+                        }
+                    )
+                    break
+            profiles_table.save(profiles)
+            _update_job(
+                job_id,
+                status=JobStatus.COMPLETED,
+                stage=JobStage.COMPLETED,
+                progress=100,
+                message=f"Completed: {len(parsed_questions)} questions parsed{warning}",
+            )
+        except Exception as exc:
+            _update_document(document_id, status=DocumentStatus.FAILED)
+            _update_job(
+                job_id,
+                status=JobStatus.FAILED,
+                stage=JobStage.FAILED,
+                progress=100,
+                message="Processing failed",
+                error=str(exc),
+            )
+        finally:
+            active_tasks.pop(job_id, None)
 
 
 def enqueue_document_job(course_id: str, document_id: str) -> dict:
