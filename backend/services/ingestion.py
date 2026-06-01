@@ -148,6 +148,7 @@ async def process_document_job(job_id: str):
 
         _append_questions(parsed_questions)
 
+        _update_document(document_id, status=DocumentStatus.COMPLETED)
         _update_job(job_id, stage=JobStage.INDEXING_MATERIALS, progress=85, message="Updating course profile")
         _aggregate_course_profile(document["course_id"])
 
@@ -163,8 +164,6 @@ async def process_document_job(job_id: str):
                 )
                 break
         profiles_table.save(profiles)
-
-        _update_document(document_id, status=DocumentStatus.COMPLETED)
         _update_job(
             job_id,
             status=JobStatus.COMPLETED,
