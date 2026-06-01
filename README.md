@@ -9,7 +9,8 @@ AI-powered exam preparation tool: upload past exam PDFs, analyze exam style, and
 - **Typed materials** — Distinguish `past_exam`, `homework`, `slides`, and `reference_pdf`
 - **Exam style cloning** — Build a style profile mainly from exams and homework
 - **Adaptive practice** — Questions adjust difficulty based on your performance (SM-2 algorithm)
-- **Mock exam** — Generate full mock exams that match the course profile
+- **LLM grading** — Free-form answers (short answer, calculation, essay) graded by LLM with feedback
+- **Mock exam** — Generate full mock exams that match the course profile, with per-question grading
 - **Knowledge tracking** — Concept-level mastery tracking with spaced repetition scheduling
 
 ## Tech Stack
@@ -18,7 +19,7 @@ AI-powered exam preparation tool: upload past exam PDFs, analyze exam style, and
 |-------|-----------|
 | Frontend | React + Vite + Tailwind CSS v4 |
 | Backend | Python FastAPI + uv |
-| LLM | DeepSeek API |
+| LLM | DeepSeek API (deepseek-v4-flash) |
 | PDF Parsing | pdfplumber + LLM |
 | Spaced Repetition | SM-2 algorithm |
 | Design | Claude/Anthropic-inspired (warm ivory, editorial) |
@@ -58,6 +59,15 @@ Open http://localhost:5173
 docker-compose up --build
 ```
 
+## Demo Flow
+
+1. **Create a course** — Enter a course name (e.g., "AIAA 2711 Math for AI")
+2. **Upload materials** — Upload past exams, homework, slides, or reference PDFs. Choose document type.
+3. **Wait for parsing** — Background jobs parse questions asynchronously. Progress shown in UI.
+4. **Review questions** — Browse parsed questions by topic, difficulty, or source type.
+5. **Practice** — Start adaptive practice. Questions adjust to your mastery level. LLM grades free-form answers.
+6. **Mock exam** — Generate a mock exam matching the exam style. Submit and see graded results.
+
 ## Project Structure
 
 ```
@@ -79,15 +89,16 @@ exam-cloning-agent/
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/upload` | Upload PDF, parse questions |
 | POST | `/api/uploads` | Upload a course document and queue background parsing |
 | GET | `/api/courses` | List course workspaces |
+| POST | `/api/courses` | Create a course |
 | GET | `/api/documents` | List course documents |
 | GET | `/api/jobs` | Poll background parsing jobs |
 | GET | `/api/questions` | List course questions (with filters) |
 | POST | `/api/practice/next` | Get next adaptive question for a course |
-| POST | `/api/practice/answer` | Submit answer, update mastery |
+| POST | `/api/practice/answer` | Submit answer (LLM-graded for free-form) |
 | POST | `/api/exam/generate` | Generate mock exam |
+| POST | `/api/exam/submit` | Submit exam answers for grading |
 | GET | `/api/stats` | Learning statistics |
 
 ## License
