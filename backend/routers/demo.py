@@ -1,5 +1,7 @@
 """One-click demo course seeding for competition demos."""
+import copy
 import json
+import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -28,6 +30,12 @@ async def seed_demo(user_id: str = Depends(get_user_id)):
     # Idempotency key: (name lower, user_id)
     existing_keys = {(c["name"].lower(), c.get("user_id", "public")) for c in existing_courses}
 
+    # Every user gets a private copy.  Seed IDs are only template identifiers;
+    # reusing them would make documents/questions collide across users.
+    seed = copy.deepcopy(seed)
+    course_id_map = {c["id"]: uuid.uuid4().hex[:10] for c in seed.get("courses", [])}
+    document_id_map = {d["id"]: uuid.uuid4().hex[:10] for d in seed.get("documents", [])}
+
     # Course
     seeded_course = None
     already_existed = False
@@ -37,6 +45,7 @@ async def seed_demo(user_id: str = Depends(get_user_id)):
             seeded_course = next(ec for ec in existing_courses if ec["name"].lower() == c["name"].lower() and ec.get("user_id", "public") == user_id)
             already_existed = True
             continue
+        c["id"] = course_id_map[c["id"]]
         c["user_id"] = user_id
         courses_table.append(c)
         seeded_course = c
@@ -46,31 +55,34 @@ async def seed_demo(user_id: str = Depends(get_user_id)):
 
     course_id = seeded_course["id"]
 
-    # Documents (skip if already present by id)
-    existing_doc_ids = {d["id"] for d in documents_table.load()}
+    # Documents
     for d in seed.get("documents", []):
-        if d["id"] not in existing_doc_ids:
-            d["user_id"] = user_id
-            documents_table.append(d)
+        old_id = d["id"]
+        d["id"] = document_id_map[old_id]
+        d["course_id"] = course_id_map[d["course_id"]]
+        d["user_id"] = user_id
+        documents_table.append(d)
 
-    # Questions (skip if already present by id)
-    existing_q_ids = {q["id"] for q in questions_table.load()}
-    new_qs = [q for q in seed.get("questions", []) if q["id"] not in existing_q_ids]
-    if new_qs:
-        for q in new_qs:
-            q["user_id"] = user_id
-        all_qs = questions_table.load()
-        all_qs.extend(new_qs)
-        questions_table.save(all_qs)
+    # Questions
+    new_qs = seed.get("questions", [])
+    for q in new_qs:
+        q["id"] = uuid.uuid4().hex[:10]
+        q["course_id"] = course_id_map[q["course_id"]]
+        source_document_id = q.get("source_document_id")
+        if source_document_id in document_id_map:
+            q["source_document_id"] = document_id_map[source_document_id]
+        q["user_id"] = user_id
+    questions_table.mutate(lambda questions: questions.extend(new_qs))
 
-    # Profile (skip if already present by course_id)
-    profiles = profiles_table.load()
-    existing_p_ids = {p["course_id"] for p in profiles}
+    # Profile
     for p in seed.get("course_profiles", []):
-        if p["course_id"] not in existing_p_ids:
-            p["user_id"] = user_id
-            profiles.append(p)
-    profiles_table.save(profiles)
+        p["course_id"] = course_id_map[p["course_id"]]
+        p["user_id"] = user_id
+        for document_profile in p.get("document_profiles", []):
+            old_document_id = document_profile.get("document_id")
+            if old_document_id in document_id_map:
+                document_profile["document_id"] = document_id_map[old_document_id]
+        profiles_table.append(p)
 
     return {
         "status": "seeded",

@@ -1,18 +1,11 @@
 import json
 import logging
 
-import httpx
-from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+from config import DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+from models.compute import ModelRequestConfig
+from services.compute import Provider, builtin_provider, chat_completion, local_providers, provider_from_request
 
 logger = logging.getLogger(__name__)
-
-
-def _resolve_key(user_api_key: str | None) -> str:
-    """User-provided key takes precedence; fall back to built-in demo key."""
-    key = (user_api_key or "").strip() or DEEPSEEK_API_KEY
-    if not key:
-        raise RuntimeError("No API key available. Set DEEPSEEK_API_KEY or provide your own.")
-    return key
 
 
 async def call_llm(
@@ -20,31 +13,51 @@ async def call_llm(
     user_prompt: str,
     temperature: float = 0.7,
     user_api_key: str | None = None,
+    model_config: ModelRequestConfig | None = None,
+    operation: str = "completion",
 ) -> str:
-    """Call DeepSeek API and return the response content."""
-    api_key = _resolve_key(user_api_key)
+    """Route a completion across a user endpoint, local service, then built-in.
 
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        response = await client.post(
-            f"{DEEPSEEK_BASE_URL}/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": DEEPSEEK_MODEL,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "temperature": temperature,
-                "thinking": {"type": "disabled"},
-            },
+    ``user_api_key`` remains supported for existing callers and means “use the
+    built-in DeepSeek endpoint with this user-owned key”. New callers should
+    pass ``model_config`` to select any public OpenAI-compatible endpoint.
+    """
+    config = model_config or ModelRequestConfig(api_key=user_api_key)
+    candidates: list[Provider] = []
+    primary = await provider_from_request(config)
+    if primary:
+        candidates.append(primary)
+    elif config.api_key:
+        candidates.append(
+            Provider("User DeepSeek key", "user", DEEPSEEK_BASE_URL.rstrip("/"), config.model or DEEPSEEK_MODEL, config.api_key, True)
         )
-        if response.status_code != 200:
-            logger.error("LLM API returned %s: %s", response.status_code, response.text[:500])
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+
+    if not candidates or config.allow_fallback:
+        candidates.extend(provider for provider in local_providers() if provider.model)
+        built_in = builtin_provider()
+        if built_in and all(p.identity != built_in.identity for p in candidates):
+            candidates.append(built_in)
+
+    if not candidates:
+        raise RuntimeError("No usable model provider is configured")
+
+    first_name = candidates[0].name
+    last_error: Exception | None = None
+    for index, provider in enumerate(candidates):
+        try:
+            return await chat_completion(
+                provider,
+                system_prompt,
+                user_prompt,
+                temperature,
+                operation=operation,
+                route_reason="user_preference" if index == 0 and primary else ("configured_route" if index == 0 else "automatic_fallback"),
+                fallback_from=first_name if index else None,
+            )
+        except Exception as exc:
+            last_error = exc
+            logger.warning("Model provider %s failed; fallback=%s", provider.name, index + 1 < len(candidates))
+    raise RuntimeError("All configured model providers failed") from last_error
 
 
 def strip_json_fence(result: str) -> str:
@@ -68,6 +81,7 @@ async def grade_answer(
     options: list[str] | None = None,
     question_type: str = "short_answer",
     user_api_key: str | None = None,
+    model_config: ModelRequestConfig | None = None,
 ) -> dict:
     """Use LLM to grade a free-form answer.
     Returns structured dict: {correct, feedback, missing_steps, wrong_concepts, suggestion}."""
@@ -110,7 +124,7 @@ Student's answer: {student_answer}
 Grade this answer."""
 
     try:
-        result = await call_llm(system_prompt, user_prompt, temperature=0.2, user_api_key=user_api_key)
+        result = await call_llm(system_prompt, user_prompt, temperature=0.2, user_api_key=user_api_key, model_config=model_config, operation="grade")
         result = strip_json_fence(result)
         parsed = json.loads(result)
         return {

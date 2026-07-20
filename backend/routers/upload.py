@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from config import UPLOAD_DIR
 from models.document import DocumentType
@@ -13,11 +13,18 @@ from services.store import courses_table, documents_table
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+MAX_TEXT_CHARS = 100_000
+UPLOAD_CHUNK_BYTES = 1024 * 1024
+
 
 def _ensure_course(course_id: str | None, course_name: str | None, user_id: str) -> dict:
     courses = courses_table.load()
     if course_id:
-        course = next((c for c in courses if c["id"] == course_id), None)
+        course = next(
+            (c for c in courses if c["id"] == course_id and c.get("user_id", "public") in (user_id, "public")),
+            None,
+        )
         if not course:
             raise HTTPException(status_code=404, detail="Course not found")
         return course
@@ -26,7 +33,10 @@ def _ensure_course(course_id: str | None, course_name: str | None, user_id: str)
     if not clean_name:
         raise HTTPException(status_code=400, detail="course_name is required when course_id is missing")
 
-    existing = next((c for c in courses if c["name"].lower() == clean_name.lower()), None)
+    existing = next(
+        (c for c in courses if c["name"].lower() == clean_name.lower() and c.get("user_id", "public") == user_id),
+        None,
+    )
     if existing:
         return existing
 
@@ -60,8 +70,24 @@ async def upload_document(
     document_id = uuid.uuid4().hex[:10]
     stored_filename = f"{document_id}_{os.path.basename(file.filename)}"
     file_path = os.path.join(UPLOAD_DIR, stored_filename)
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
+    size = 0
+    first_chunk = True
+    try:
+        with open(file_path, "wb") as f:
+            while chunk := await file.read(UPLOAD_CHUNK_BYTES):
+                size += len(chunk)
+                if size > MAX_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail="PDF exceeds the 20 MiB upload limit")
+                if first_chunk and not chunk.startswith(b"%PDF-"):
+                    raise HTTPException(status_code=400, detail="File content is not a valid PDF")
+                first_chunk = False
+                f.write(chunk)
+        if size == 0:
+            raise HTTPException(status_code=400, detail="PDF file is empty")
+    except Exception:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise
 
     now = datetime.now(timezone.utc).isoformat()
     document = {
@@ -93,8 +119,15 @@ class TextUploadRequest(BaseModel):
     course_id: str | None = None
     course_name: str | None = None
     document_type: DocumentType
-    title: str
-    text: str
+    title: str = Field(min_length=1, max_length=200)
+    text: str = Field(min_length=1, max_length=MAX_TEXT_CHARS)
+
+    @field_validator("title", "text")
+    @classmethod
+    def reject_blank_text(cls, value: str):
+        if not value.strip():
+            raise ValueError("value must not be blank")
+        return value
 
 
 @router.post("/text")

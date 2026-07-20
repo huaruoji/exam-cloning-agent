@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
-import { BookOpen, Clock3, FolderOpen, Sparkles, TrendingUp } from "lucide-react"
+import { BookOpen, Clock3, Cpu, FolderOpen, Sparkles, TrendingUp, ArrowRight } from "lucide-react"
+import { Link } from "react-router-dom"
 import {
   Radar,
   RadarChart,
@@ -14,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/Card"
 import { api } from "@/lib/api"
 import { useLayoutContext } from "@/hooks/useLayoutContext"
 import { useToast } from "@/components/Toast"
+import { useLanguage } from "@/i18n"
 
 interface Stats {
   total_questions_in_bank: number
@@ -29,17 +31,18 @@ interface Stats {
 export function Dashboard() {
   const { selectedCourse, refreshCourses, selectCourse } = useLayoutContext()
   const { addToast } = useToast()
+  const { t } = useLanguage()
   const [stats, setStats] = useState<Stats | null>(null)
-  const [reviewStats, setReviewStats] = useState<any>(null)
+  const [showAllTopics, setShowAllTopics] = useState(false)
+  const [computeHealthy, setComputeHealthy] = useState<boolean | null>(null)
 
   useEffect(() => {
     if (!selectedCourse) {
       setStats(null)
-      setReviewStats(null)
       return
     }
     api.getStats(selectedCourse.id).then(setStats).catch(() => setStats(null))
-    api.getReviewStats(selectedCourse.id).then(setReviewStats).catch(() => setReviewStats(null))
+    api.getComputeStatus().then((value) => setComputeHealthy(value.status === "healthy" || value.providers?.some((provider: any) => provider.healthy || provider.usable))).catch(() => setComputeHealthy(false))
   }, [selectedCourse])
 
   const seedDemo = async () => {
@@ -85,22 +88,6 @@ export function Dashboard() {
     },
   ]
 
-  // Streak / today row
-  const todayCount = reviewStats?.daily?.length
-    ? reviewStats.daily.reduce((sum: number, d: any) => {
-        const today = new Date().toISOString().slice(0, 10)
-        return d.date === today ? sum + (d.count || 0) : sum
-      }, 0)
-    : 0
-
-  const topicStats = reviewStats?.topic_stats ?? []
-  const bestTopic = topicStats.length
-    ? topicStats.reduce((best: any, curr: any) => (curr.accuracy > (best?.accuracy || 0) ? curr : best), null)
-    : null
-  const weakestTopic = topicStats.length
-    ? topicStats.reduce((weak: any, curr: any) => (curr.accuracy < (weak?.accuracy || 1) ? curr : weak), null)
-    : null
-
   const masteryData = Object.entries(stats?.concept_mastery ?? {})
     .map(([concept, data]) => ({ topic: concept, score: Math.round(data.score * 100) }))
     .slice(0, 8)
@@ -115,32 +102,9 @@ export function Dashboard() {
         updated automatically.
       </p>
 
-      {/* Streak / today row */}
-      <div className="mt-6 grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardContent className="text-center">
-            <p className="text-2xl font-semibold">{todayCount}</p>
-            <p className="text-xs text-slate-muted">Questions today</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="text-center">
-            <p className="text-2xl font-semibold">{stats ? `${Math.round((stats.accuracy ?? 0) * 100)}%` : "—"}</p>
-            <p className="text-xs text-slate-muted">Overall accuracy</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="text-center">
-            <p className="text-2xl font-semibold truncate">{bestTopic ? bestTopic.topic : "—"}</p>
-            <p className="text-xs text-slate-muted">Best topic</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="text-center">
-            <p className="text-2xl font-semibold truncate">{weakestTopic ? weakestTopic.topic : "—"}</p>
-            <p className="text-xs text-slate-muted">Weakest topic</p>
-          </CardContent>
-        </Card>
+      <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-coral/20 bg-coral/5 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div><p className="text-xs uppercase tracking-[0.14em] text-coral">{t("nextStep")}</p><p className="mt-1 font-medium">{stats?.total_questions_in_bank ? t("startPractice") : t("uploadMaterial")}</p><p className="mt-1 text-xs text-slate-muted">{stats?.total_questions_in_bank ? "Adaptive routing will favor due and weak concepts." : "A past exam gives the best style signal."}</p></div>
+        <Link to={stats?.total_questions_in_bank ? "/practice" : "/upload"}><Button variant="coral">{stats?.total_questions_in_bank ? t("practice") : t("materials")}<ArrowRight size={15} /></Button></Link>
       </div>
 
       <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -162,16 +126,17 @@ export function Dashboard() {
       <div className="mt-8 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Topic coverage</CardTitle>
+            <CardTitle>{t("topicCoverage")}</CardTitle>
           </CardHeader>
           <CardContent>
             {stats?.knowledge_topics?.length ? (
               <div className="flex flex-wrap gap-2">
-                {stats.knowledge_topics.map((topic) => (
+                {stats.knowledge_topics.slice(0, showAllTopics ? undefined : 8).map((topic) => (
                   <span key={topic} className="rounded-full border border-border bg-ivory px-3 py-1 text-xs text-slate-ink">
                     {topic}
                   </span>
                 ))}
+                {stats.knowledge_topics.length > 8 && <button onClick={() => setShowAllTopics((value) => !value)} className="rounded-full px-3 py-1 text-xs text-coral hover:bg-coral/10">{showAllTopics ? t("showLess") : `${t("showAll")} (+${stats.knowledge_topics.length - 8})`}</button>}
               </div>
             ) : (
               <p className="text-sm text-slate-muted">
@@ -201,6 +166,8 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-4"><CardContent className="flex flex-wrap items-center justify-between gap-4 py-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-coral/10 p-3 text-coral"><Cpu size={18} /></div><div><p className="text-sm font-medium">{t("compute")}</p><p className="text-xs text-slate-muted">{computeHealthy === null ? t("loading") : computeHealthy ? t("computeHealthy") : t("computeDegraded")}</p></div></div><Link to="/compute" className="text-sm text-coral hover:underline">{t("viewCompute")} →</Link></CardContent></Card>
 
       {masteryData.length >= 3 && (
         <Card className="mt-4">

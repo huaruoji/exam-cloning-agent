@@ -12,21 +12,14 @@ import {
   History,
   Menu,
   X,
+  Cpu,
+  Languages,
 } from "lucide-react"
 
 import { type Course, api } from "@/lib/api"
 import { useToast } from "@/components/Toast"
 import { cn } from "@/lib/utils"
-
-const navItems = [
-  { to: "/", icon: LayoutDashboard, label: "Overview" },
-  { to: "/upload", icon: FolderOpen, label: "Materials" },
-  { to: "/questions", icon: BookOpen, label: "Question Bank" },
-  { to: "/practice", icon: Target, label: "Practice" },
-  { to: "/exam", icon: FileText, label: "Mock Exam" },
-  { to: "/review", icon: History, label: "Review" },
-  { to: "/settings", icon: SettingsIcon, label: "Settings" },
-]
+import { useLanguage } from "@/i18n"
 
 export interface LayoutContextValue {
   courses: Course[]
@@ -43,6 +36,7 @@ interface CourseMeta {
 }
 
 export function Layout() {
+  const { language, setLanguage, t } = useLanguage()
   const { addToast } = useToast()
   const [courses, setCourses] = useState<Course[]>([])
   const [selectedCourseId, setSelectedCourseId] = useState<string>(localStorage.getItem(STORAGE_KEY) || "")
@@ -51,6 +45,18 @@ export function Layout() {
   const [seeding, setSeeding] = useState(false)
   const [meta, setMeta] = useState<Record<string, CourseMeta>>({})
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [showCreateCourse, setShowCreateCourse] = useState(false)
+
+  const navItems = [
+    { to: "/", icon: LayoutDashboard, label: t("overview") },
+    { to: "/upload", icon: FolderOpen, label: t("materials") },
+    { to: "/questions", icon: BookOpen, label: t("questions") },
+    { to: "/practice", icon: Target, label: t("practice") },
+    { to: "/exam", icon: FileText, label: t("exam") },
+    { to: "/review", icon: History, label: t("review") },
+    { to: "/compute", icon: Cpu, label: t("compute") },
+    { to: "/settings", icon: SettingsIcon, label: t("settings") },
+  ]
 
   const refreshCourses = async () => {
     try {
@@ -67,7 +73,7 @@ export function Layout() {
 
   // Fetch per-course meta (question count + mastery) for the switcher.
   useEffect(() => {
-    let cancelled = false
+    const cancelled = false
     async function loadMeta() {
       const next: Record<string, CourseMeta> = {}
       await Promise.all(
@@ -114,6 +120,7 @@ export function Layout() {
     try {
       const course = await api.createCourse(name)
       setNewCourseName("")
+      setShowCreateCourse(false)
       await refreshCourses()
       selectCourse(course.id)
       addToast(`Course "${name}" created`, "success")
@@ -176,34 +183,33 @@ export function Layout() {
         )}>
           <div className="mb-5">
             <p className="font-serif text-xl leading-tight">Exam Cloner</p>
-            <p className="mt-1 text-xs text-slate-muted">
-              Clone exam style, practice adaptively.
-            </p>
+            <p className="mt-1 text-xs text-slate-muted">Resource-aware adaptive learning.</p>
           </div>
 
           {/* Course switcher — compact list with question count + mastery bar */}
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-muted">Courses</p>
-            {courses.length === 0 && (
+            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-muted">{t("courses")}</p>
+            <div className="flex items-center gap-1">
               <button
                 onClick={seedDemo}
                 disabled={seeding}
                 className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-coral hover:bg-coral/10 disabled:opacity-50"
                 title="Load a ready-made demo course"
               >
-                <Sparkles size={11} /> {seeding ? "Loading..." : "Demo"}
+                <Sparkles size={11} /> {seeding ? t("loading") : t("demo")}
               </button>
-            )}
+              <button onClick={() => setShowCreateCourse((value) => !value)} className="rounded-md p-1 text-slate-muted hover:bg-coral/10 hover:text-coral" aria-label={t("newCourse")}><Plus size={13} /></button>
+            </div>
           </div>
 
           <div className="mb-4 max-h-[240px] space-y-1 overflow-y-auto pr-1">
             {courses.length === 0 ? (
               <p className="rounded-lg border border-dashed border-border px-3 py-3 text-xs text-slate-muted">
-                No courses yet. Create one below or load the demo.
+                {t("noCourses")}
               </p>
             ) : (
               courses.map((course) => {
-                const m = meta[course.id] || { questionCount: 0, mastery: 0 }
+                const m = meta[course.id]
                 const isActive = course.id === selectedCourseId
                 return (
                   <button
@@ -221,10 +227,10 @@ export function Layout() {
                         {course.name}
                       </span>
                       <span className="shrink-0 rounded-full bg-ivory px-1.5 py-0.5 text-[10px] text-slate-muted">
-                        {m.questionCount}
+                        {m ? m.questionCount : <span className="inline-block h-2.5 w-4 animate-pulse rounded bg-border" />}
                       </span>
                     </div>
-                    {m.questionCount > 0 && (
+                    {m && m.questionCount > 0 && (
                       <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-ivory">
                         <div
                           className="h-full rounded-full bg-coral/60"
@@ -239,13 +245,13 @@ export function Layout() {
           </div>
 
           {/* New course */}
-          <div className="mb-6">
+          {showCreateCourse && <div className="mb-6 rounded-xl border border-border bg-ivory-card p-2">
             <div className="flex gap-2">
               <input
                 value={newCourseName}
                 onChange={(e) => setNewCourseName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && createCourse()}
-                placeholder="New course name"
+                placeholder={t("courseName")}
                 className="min-w-0 flex-1 rounded-lg border border-border bg-ivory px-3 py-2 text-sm outline-none"
               />
               <button
@@ -256,7 +262,8 @@ export function Layout() {
                 <Plus size={16} />
               </button>
             </div>
-          </div>
+            <button onClick={() => setShowCreateCourse(false)} className="mt-1 text-[11px] text-slate-muted hover:text-slate-ink">{t("cancel")}</button>
+          </div>}
 
           <nav className="shrink-0 space-y-1">
             {navItems.map(({ to, icon: Icon, label }) => (
@@ -280,8 +287,9 @@ export function Layout() {
             ))}
           </nav>
 
-          <div className="mt-auto border-t border-border pt-4 text-[11px] uppercase tracking-[0.16em] text-slate-muted">
-            HKUST(GZ) AI+ competition build
+          <div className="mt-auto space-y-3 border-t border-border pt-4">
+            <button onClick={() => setLanguage(language === "en" ? "zh-CN" : "en")} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs text-slate-muted hover:bg-ivory-card hover:text-slate-ink"><span className="flex items-center gap-2"><Languages size={14} />{t("language")}</span><span className="font-medium">{language === "en" ? "中文" : "EN"}</span></button>
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-muted">CCF Computility 2026</p>
           </div>
 
           {/* Close button — only on mobile, top-right of sidebar */}

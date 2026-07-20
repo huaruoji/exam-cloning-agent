@@ -18,12 +18,14 @@ import { useLayoutContext } from "@/hooks/useLayoutContext"
 import { useToast } from "@/components/Toast"
 import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { useLanguage } from "@/i18n"
 
 const FORCED_TOPIC_KEY = "exam-cloner:practice-topic"
 
 type Tab = "wrong" | "history"
 
 export function Review() {
+  const { t } = useLanguage()
   const { selectedCourse } = useLayoutContext()
   const { addToast } = useToast()
   const navigate = useNavigate()
@@ -61,8 +63,8 @@ export function Review() {
   if (!selectedCourse) {
     return (
       <div>
-        <h1 className="font-serif text-3xl">Review</h1>
-        <p className="mt-2 text-sm text-slate-muted">Select a course to see your wrong answers and practice history.</p>
+        <h1 className="font-serif text-3xl">{t("review")}</h1>
+        <p className="mt-2 text-sm text-slate-muted">{t("selectCourse")}</p>
       </div>
     )
   }
@@ -71,7 +73,7 @@ export function Review() {
 
   return (
     <div>
-      <h1 className="font-serif text-3xl">Review</h1>
+      <h1 className="font-serif text-3xl">{t("review")}</h1>
       <p className="mt-2 text-sm text-slate-muted">Wrong answers, practice history, and progress over time.</p>
 
       {/* Summary */}
@@ -151,7 +153,7 @@ export function Review() {
               </div>
             )}
             {wrong.length === 0 ? (
-              <Card><CardContent className="py-12 text-sm text-slate-muted">No wrong answers yet. Practice to populate this list.</CardContent></Card>
+              <Card><CardContent className="py-12 text-sm text-slate-muted">{t("noWrongAnswers")}</CardContent></Card>
             ) : (
               wrong.map((item) => (
                 <Card key={item.id}>
@@ -182,7 +184,7 @@ export function Review() {
 
         {tab === "history" && (
           history.length === 0 ? (
-            <Card><CardContent className="py-12 text-sm text-slate-muted">No practice history yet.</CardContent></Card>
+            <Card><CardContent className="py-12 text-sm text-slate-muted">{t("noHistory")}</CardContent></Card>
           ) : (
             history.map((item) => (
               <Card key={item.id}>

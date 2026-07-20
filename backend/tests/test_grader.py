@@ -10,15 +10,8 @@ from services.grader import grade
 # --- async grade ---
 
 @patch("services.grader.grade_answer")
-async def test_grade_mcq_calls_llm(mock_grade_answer):
-    """grade() routes mcq questions to grade_answer."""
-    mock_grade_answer.return_value = {
-        "correct": True,
-        "feedback": "Correct!",
-        "missing_steps": [],
-        "wrong_concepts": [],
-        "suggestion": "",
-    }
+async def test_grade_mcq_uses_deterministic_rule(mock_grade_answer):
+    """MCQ grading saves a model call when both choices are unambiguous."""
     question = {
         "question_type": "mcq",
         "content": "What is 2+2?",
@@ -27,17 +20,9 @@ async def test_grade_mcq_calls_llm(mock_grade_answer):
         "explanation": "Basic addition.",
     }
     result = await grade(question, "A")
-    mock_grade_answer.assert_called_once_with(
-        question_content="What is 2+2?",
-        correct_answer="A",
-        student_answer="A",
-        explanation="Basic addition.",
-        options=["1", "2", "3", "4"],
-        question_type="mcq",
-        user_api_key=None,
-    )
+    mock_grade_answer.assert_not_called()
     assert result["correct"] is True
-    assert result["feedback"] == "Correct!"
+    assert result["feedback"] == "Correct."
 
 
 @patch("services.grader.grade_answer")
@@ -63,24 +48,14 @@ async def test_grade_mcq_wrong(mock_grade_answer):
 
 
 @patch("services.grader.grade_answer")
-async def test_grade_true_false_calls_llm(mock_grade_answer):
-    """grade() routes true_false questions to grade_answer."""
-    mock_grade_answer.return_value = {
-        "correct": True,
-        "feedback": "Correct!",
-        "missing_steps": [],
-        "wrong_concepts": [],
-        "suggestion": "",
-    }
+async def test_grade_true_false_uses_deterministic_rule(mock_grade_answer):
     question = {
         "question_type": "true_false",
         "content": "The sky is blue.",
         "answer": "True",
     }
     result = await grade(question, "True")
-    mock_grade_answer.assert_called_once()
-    args, kwargs = mock_grade_answer.call_args
-    assert kwargs["question_type"] == "true_false"
+    mock_grade_answer.assert_not_called()
     assert result["correct"] is True
 
 
@@ -109,6 +84,7 @@ async def test_grade_short_answer_calls_llm(mock_grade_answer):
         options=None,
         question_type="short_answer",
         user_api_key=None,
+        model_config=None,
     )
     assert result["correct"] is False
 

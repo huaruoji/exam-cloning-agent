@@ -2,6 +2,27 @@ const BASE_URL = `${import.meta.env.BASE_URL}api`
 
 const API_KEY_STORAGE = "exam-cloner:user-api-key"
 const USER_ID_STORAGE = "exam-cloner:user-id"
+const MODEL_CONFIG_STORAGE = "exam-cloner:model-config"
+
+export interface ModelConfig {
+  label: string
+  baseUrl: string
+  model: string
+  apiKey: string
+  allowFallback: boolean
+}
+
+export const defaultModelConfig: ModelConfig = { label: "Custom model", baseUrl: "", model: "", apiKey: "", allowFallback: true }
+
+export function getModelConfig(): ModelConfig {
+  try { return { ...defaultModelConfig, ...JSON.parse(localStorage.getItem(MODEL_CONFIG_STORAGE) || "{}") } }
+  catch { return defaultModelConfig }
+}
+
+export function setModelConfig(config: ModelConfig) {
+  localStorage.setItem(MODEL_CONFIG_STORAGE, JSON.stringify(config))
+  setUserApiKey(config.apiKey)
+}
 
 function getUserId(): string {
   let uid = localStorage.getItem(USER_ID_STORAGE)
@@ -77,17 +98,39 @@ export interface Question {
   source_page?: number | null
 }
 
-function authHeaders(): Record<string, string> {
-  const key = getUserApiKey()
-  const headers: Record<string, string> = { "X-User-Id": getUserId() }
+function identityHeaders(): Record<string, string> {
+  return { "X-User-Id": getUserId() }
+}
+
+function modelHeaders(): Record<string, string> {
+  const config = getModelConfig()
+  const key = config.apiKey || getUserApiKey()
+  const headers = identityHeaders()
   if (key) headers["X-User-Api-Key"] = key
+  if (config.baseUrl) headers["X-Model-Base-Url"] = config.baseUrl
+  if (config.model) headers["X-Model-Name"] = config.model
+  headers["X-Allow-Fallback"] = String(config.allowFallback)
   return headers
 }
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  const { headers: optionHeaders, ...rest } = options || {}
   const res = await fetch(`${BASE_URL}${url}`, {
-    headers: { "Content-Type": "application/json", ...authHeaders(), ...options?.headers },
-    ...options,
+    ...rest,
+    headers: { "Content-Type": "application/json", ...identityHeaders(), ...optionHeaders },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || "Request failed")
+  }
+  return res.json()
+}
+
+async function modelRequest<T>(url: string, options?: RequestInit): Promise<T> {
+  const { headers: optionHeaders, ...rest } = options || {}
+  const res = await fetch(`${BASE_URL}${url}`, {
+    ...rest,
+    headers: { "Content-Type": "application/json", ...modelHeaders(), ...optionHeaders },
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
@@ -120,7 +163,7 @@ export const api = {
     const res = await fetch(`${BASE_URL}/uploads`, {
       method: "POST",
       body: formData,
-      headers: authHeaders(),
+      headers: identityHeaders(),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: "Upload failed" }))
@@ -184,7 +227,7 @@ export const api = {
     }),
 
   getNextQuestion: (courseId: string, allowAi: boolean = true, topic?: string) =>
-    request<{ source: string | null; question: Question | null }>("/practice/next", {
+    modelRequest<{ source: string | null; question: Question | null }>("/practice/next", {
       method: "POST",
       body: JSON.stringify({ course_id: courseId, allow_ai: allowAi, ...(topic ? { topic } : {}) }),
     }),
@@ -195,7 +238,7 @@ export const api = {
     correct?: boolean
     action?: "submit" | "reveal" | "report" | "next"
   }) =>
-    request<{
+    modelRequest<{
       correct: boolean | null
       concept: string
       feedback: string
@@ -230,7 +273,7 @@ export const api = {
   }): Promise<{ id: string; title: string; questions: Question[]; style_profile: any; time_limit_minutes: number | null }> => {
     const res = await fetch(`${BASE_URL}/exam/generate`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...modelHeaders() },
       body: JSON.stringify({
         course_id: payload.courseId,
         num_questions: payload.numQuestions,
@@ -278,7 +321,7 @@ export const api = {
   deleteExam: (examId: string) =>
     request<{ deleted: string }>(`/exam/${examId}`, { method: "DELETE" }),
   submitExam: (courseId: string, examId: string, answers: { question_id: string; answer: string }[], elapsedSeconds?: number) =>
-    request<{
+    modelRequest<{
       total: number
       correct_count: number
       accuracy: number
@@ -336,6 +379,11 @@ export const api = {
 
   // Demo
   seedDemo: () => request<{ status: string; course: Course | null; questions_loaded?: number; message?: string }>("/demo/seed", { method: "POST" }),
+
+  getComputeStatus: () => request<any>("/compute/status"),
+  probeCompute: (payload: { base_url: string; api_key?: string; model?: string }) =>
+    request<any>("/compute/probe", { method: "POST", body: JSON.stringify(payload) }),
+  runFailoverDrill: () => request<any>("/compute/failover-drill", { method: "POST" }),
 
   health: () => request<{ status: string }>("/health"),
 }

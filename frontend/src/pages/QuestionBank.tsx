@@ -9,10 +9,12 @@ import { useLayoutContext } from "@/hooks/useLayoutContext"
 import { useToast } from "@/components/Toast"
 import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { useLanguage } from "@/i18n"
 
 const PAGE_SIZE = 20
 
 export function QuestionBank() {
+  const { t } = useLanguage()
   const { selectedCourse } = useLayoutContext()
   const { addToast } = useToast()
   const [questions, setQuestions] = useState<any[]>([])
@@ -126,8 +128,8 @@ export function QuestionBank() {
   if (!selectedCourse) {
     return (
       <div>
-        <h1 className="font-serif text-3xl">Question Bank</h1>
-        <p className="mt-2 text-sm text-slate-muted">Select a course to explore its parsed questions.</p>
+        <h1 className="font-serif text-3xl">{t("questions")}</h1>
+        <p className="mt-2 text-sm text-slate-muted">{t("selectCourse")}</p>
       </div>
     )
   }
@@ -139,7 +141,7 @@ export function QuestionBank() {
     <div>
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-3xl">Question Bank</h1>
+          <h1 className="font-serif text-3xl">{t("questions")}</h1>
           <p className="mt-2 text-sm text-slate-muted">Inspect parsed questions. Remove bad parses, edit topics, or re-cluster with AI.</p>
         </div>
         <button
@@ -176,7 +178,7 @@ export function QuestionBank() {
 
       <div className="mt-3 space-y-3">
         {paged.length === 0 ? (
-          <Card><CardContent className="py-12 text-sm text-slate-muted">No questions match the current filters.</CardContent></Card>
+          <Card><CardContent className="py-12 text-sm text-slate-muted">{t("noMatchingQuestions")}</CardContent></Card>
         ) : (
           paged.map((q) => (
             <div key={q.id}>

@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useLayoutContext } from "@/hooks/useLayoutContext"
 import { useToast } from "@/components/Toast"
 import { api, type DocumentRecord, type JobRecord } from "@/lib/api"
+import { useLanguage } from "@/i18n"
 
 const documentTypes = [
   { value: "past_exam", label: "Past exam" },
@@ -17,6 +18,7 @@ const documentTypes = [
 export function Upload() {
   const { selectedCourse, refreshCourses } = useLayoutContext()
   const { addToast } = useToast()
+  const { t } = useLanguage()
   const [file, setFile] = useState<File | null>(null)
   const [documentType, setDocumentType] = useState("past_exam")
   const [dragOver, setDragOver] = useState(false)
@@ -128,20 +130,20 @@ export function Upload() {
   if (!selectedCourse) {
     return (
       <div>
-        <h1 className="font-serif text-3xl">Materials</h1>
-        <p className="mt-2 text-sm text-slate-muted">Select a course first, then upload exams, homework, slides, or reference PDFs.</p>
+        <h1 className="font-serif text-3xl">{t("materials")}</h1>
+        <p className="mt-2 text-sm text-slate-muted">{t("selectCourse")}</p>
       </div>
     )
   }
 
   return (
     <div>
-      <h1 className="font-serif text-3xl">Materials</h1>
+      <h1 className="font-serif text-3xl">{t("materials")}</h1>
       <p className="mt-2 text-sm text-slate-muted">
         Upload PDFs or paste text into <span className="text-slate-ink">{selectedCourse.name}</span>. Parsing runs in the background and updates the course profile automatically.
       </p>
 
-      <div className="mt-8 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+      <div className={`mt-8 grid gap-4 ${jobs.length ? "lg:grid-cols-[1.1fr_0.9fr]" : ""}`}>
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -268,16 +270,13 @@ export function Upload() {
           </CardContent>
         </Card>
 
-        <Card>
+        {jobs.length > 0 && <Card>
           <CardHeader>
             <CardTitle>Background jobs</CardTitle>
             <CardDescription>Uploads are parsed asynchronously so you can keep working while the course profile builds.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {jobs.length === 0 ? (
-              <p className="text-sm text-slate-muted">No jobs yet.</p>
-            ) : (
-              jobs.map((job) => (
+            {jobs.map((job) => (
                 <div key={job.id} className="rounded-xl border border-border bg-ivory p-4">
                   <div className="flex items-center justify-between gap-4 text-sm">
                     <div>
@@ -302,10 +301,9 @@ export function Upload() {
                   </div>
                   {job.error && <p className="mt-2 text-xs text-danger">{job.error}</p>}
                 </div>
-              ))
-            )}
+              ))}
           </CardContent>
-        </Card>
+        </Card>}
       </div>
 
       <Card className="mt-4">

@@ -27,6 +27,8 @@ class Job(BaseModel):
     course_id: str
     document_id: str
     user_id: Optional[str] = None
+    source_type: str = "pdf"
+    source_text: Optional[str] = Field(default=None, exclude=True)
     status: JobStatus = JobStatus.QUEUED
     stage: JobStage = JobStage.UPLOADED
     progress: int = 0

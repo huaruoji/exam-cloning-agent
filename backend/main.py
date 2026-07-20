@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from config import FRONTEND_DIST
 from routers import (
     courses,
+    compute,
     demo,
     documents,
     exam,
@@ -63,6 +64,7 @@ async def rewrite_api_prefix(request: Request, call_next):
     return await call_next(request)
 
 app.include_router(upload.router)
+app.include_router(compute.router)
 app.include_router(courses.router)
 app.include_router(documents.router)
 app.include_router(jobs.router)

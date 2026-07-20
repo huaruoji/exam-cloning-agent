@@ -1,8 +1,18 @@
 # GOALS — Exam Cloner
 
-## Status: v0.5.2 complete
+## Status: competition build complete locally
 
 ## Progress
+
+- [x] Resource-aware OpenAI-compatible provider routing with explicit fallback
+- [x] HTTP discovery for Ollama, LM Studio, vLLM, and configured local services
+- [x] Safe user endpoint validation, per-provider concurrency limits, circuit breaker, and bounded telemetry
+- [x] Deterministic objective grading and question-bank reuse counters
+- [x] Compute Center with real provider state, routes, latency, savings, and simulated failover drill
+- [x] Browser-configurable endpoint/model/API key; model credentials sent only with model-backed requests
+- [x] SSH/local read-only compute capability probe
+- [x] Persistent lightweight Chinese/English UI switch for critical paths
+- [x] Competition correctness audit: ownership, retry, limits, route precedence, exam submission, and export idempotency
 
 - [x] Project structure created
 - [x] GitHub repo initialized

@@ -1,6 +1,8 @@
 # Exam Cloner
 
-AI-powered exam preparation tool: upload past exam PDFs, analyze exam style, and generate adaptive practice questions with spaced repetition.
+Resource-aware AI exam preparation tool: upload course materials, clone exam style,
+and generate adaptive practice while routing work across deterministic rules,
+question-bank reuse, and compatible model services.
 
 ## Features
 
@@ -12,6 +14,9 @@ AI-powered exam preparation tool: upload past exam PDFs, analyze exam style, and
 - **LLM grading** — All question types (MCQ, true/false, short answer, calculation, essay) graded by LLM with deep feedback, step-by-step reasoning
 - **Mock exam** — Generate full mock exams that match the course profile, with auto-save, elapsed time tracking, and configurable type/difficulty distribution
 - **Knowledge tracking** — Concept-level mastery tracking with spaced repetition scheduling
+- **Resource-aware routing** — Use a user-selected public OpenAI-compatible endpoint, administrator-managed local services, or the built-in provider with explicit fallback
+- **Compute Center** — Inspect detected providers, real latency/success telemetry, saved model calls, circuit state, and a labeled failover drill
+- **Bilingual shell** — Persistent Chinese/English navigation and critical controls; original course and question content is preserved
 
 ## Tech Stack
 
@@ -19,7 +24,7 @@ AI-powered exam preparation tool: upload past exam PDFs, analyze exam style, and
 |-------|-----------|
 | Frontend | React + Vite + Tailwind CSS v4 |
 | Backend | Python FastAPI + uv |
-| LLM | DeepSeek API (deepseek-v4-flash) |
+| LLM | OpenAI-compatible provider router (DeepSeek / Ollama / LM Studio / vLLM and compatible services) |
 | PDF Parsing | pdfplumber + LLM |
 | Spaced Repetition | SM-2 algorithm |
 | Design | Claude/Anthropic-inspired (warm ivory, editorial) |
@@ -30,13 +35,13 @@ AI-powered exam preparation tool: upload past exam PDFs, analyze exam style, and
 
 - Node.js 18+
 - Python 3.10+
-- DeepSeek API key
+- A model API key or compatible local service is optional; demo, question-bank practice, and objective grading can run without one
 
 ### Backend
 
 ```bash
 cp .env.example .env
-# edit .env and set DEEPSEEK_API_KEY / DEEPSEEK_MODEL
+# optionally set the built-in provider and/or MODEL_LOCAL_ENDPOINTS
 
 cd backend
 uv sync
@@ -82,6 +87,7 @@ FRONTEND_DIST=../frontend/dist uv run python main.py
 5. **Practice** — Start adaptive practice. Questions adjust to your mastery level. LLM grades free-form answers.
 6. **Mock exam** — Generate a mock exam matching the exam style, with auto-save and elapsed time tracking. Adjust type/difficulty distribution and bank/AI ratio before generating.
 7. **Review & import wrongs** — Review graded exam results, then import wrong answers to Practice for targeted redo.
+8. **Show resource evidence** — Open Compute Center, answer an objective question, inspect saved calls, and run the explicitly simulated failover drill.
 
 ## Pages
 
@@ -91,7 +97,25 @@ FRONTEND_DIST=../frontend/dist uv run python main.py
 - **Practice** — Adaptive practice with SM-2 spaced repetition
 - **Mock Exam** — Generate and take full mock exams with configurable type/difficulty distribution, auto-save, and elapsed time tracking
 - **Review** — Review practice history, wrong answers, and topic mastery
-- **Settings** — Configure API key and other preferences
+- **Compute** — Provider health, routing evidence, resource savings, and failover drill
+- **Settings** — Configure a browser-local OpenAI-compatible endpoint, model, key, and fallback preference
+
+## Compute integration
+
+User-configured endpoints must be public HTTP(S) URLs and are checked against
+server-side request-forgery targets. Their credentials remain in browser
+storage and are attached only to generation/grading requests. Administrators
+can configure trusted private or localhost services with
+`MODEL_LOCAL_ENDPOINTS`; local Ollama, LM Studio, and vLLM ports are also
+auto-discovered by default. See [docs/compute-api.md](docs/compute-api.md).
+
+For a truthful local or SSH capability report (CPU/cgroup limits, visible GPUs,
+and known inference ports):
+
+```bash
+python scripts/probe_compute_node.py
+python scripts/probe_compute_node.py --ssh user@example-host
+```
 
 ## Project Structure
 
@@ -150,6 +174,9 @@ exam-cloner/
 | PATCH | `/api/topics/question/{question_id}` | Edit a question's topic |
 | POST | `/api/demo/seed` | Load demo course data |
 | GET | `/api/demo/status` | Check if demo seed data exists |
+| GET | `/api/compute/status` | Observed provider and routing status |
+| POST | `/api/compute/probe` | Probe a user-configured public model endpoint |
+| POST | `/api/compute/failover-drill` | Run a labeled, no-cost simulated failover |
 | GET | `/api/health` | Health check |
 
 ## License

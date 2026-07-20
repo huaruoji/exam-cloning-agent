@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { AlertCircle, ArrowRight, CheckCircle, Eye, Loader2, RefreshCw, SkipForward, XCircle } from "lucide-react"
 
 import { Button } from "@/components/Button"
@@ -8,12 +8,14 @@ import { useLayoutContext } from "@/hooks/useLayoutContext"
 import { useToast } from "@/components/Toast"
 import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { useLanguage } from "@/i18n"
 
 const FORCED_TOPIC_KEY = "exam-cloner:practice-topic"
 
 export function Practice() {
   const { selectedCourse } = useLayoutContext()
   const { addToast } = useToast()
+  const { t } = useLanguage()
   const [question, setQuestion] = useState<any>(null)
   const [source, setSource] = useState<string | null>("")
   const [answer, setAnswer] = useState("")
@@ -24,8 +26,10 @@ export function Practice() {
   const [revealed, setRevealed] = useState(false)
   const [allowAi, setAllowAi] = useState(true)
   const [noQuestions, setNoQuestions] = useState(false)
+  const [slowLoading, setSlowLoading] = useState(false)
+  const slowTimer = useRef<number | null>(null)
 
-  const loadNext = useCallback(async (forcedTopic?: string) => {
+  const loadNext = useCallback(async (forcedTopic?: string, aiOverride?: boolean) => {
     if (!selectedCourse) return
     setLoading(true)
     setResult(null)
@@ -33,10 +37,13 @@ export function Practice() {
     setSelectedOption(null)
     setRevealed(false)
     setNoQuestions(false)
+    setSlowLoading(false)
+    if (slowTimer.current) window.clearTimeout(slowTimer.current)
+    slowTimer.current = window.setTimeout(() => setSlowLoading(true), 8000)
     try {
       const topic = forcedTopic || localStorage.getItem(FORCED_TOPIC_KEY) || undefined
       if (topic) localStorage.removeItem(FORCED_TOPIC_KEY)
-      const res = await api.getNextQuestion(selectedCourse.id, allowAi, topic)
+      const res = await api.getNextQuestion(selectedCourse.id, aiOverride ?? allowAi, topic)
       if (!res.question) {
         setNoQuestions(true)
         setQuestion(null)
@@ -47,6 +54,7 @@ export function Practice() {
     } catch (e: any) {
       addToast(e.message || "Failed to load question", "error")
     } finally {
+      if (slowTimer.current) window.clearTimeout(slowTimer.current)
       setLoading(false)
     }
   }, [selectedCourse, allowAi, addToast])
@@ -55,6 +63,8 @@ export function Practice() {
   useEffect(() => {
     if (selectedCourse) loadNext()
   }, [selectedCourse])
+
+  useEffect(() => () => { if (slowTimer.current) window.clearTimeout(slowTimer.current) }, [])
 
   const submitAction = async (action: "submit" | "reveal" | "next") => {
     if (!question || !selectedCourse) return
@@ -87,8 +97,8 @@ export function Practice() {
   if (!selectedCourse) {
     return (
       <div>
-        <h1 className="font-serif text-3xl">Practice</h1>
-        <p className="mt-2 text-sm text-slate-muted">Select a course to start adaptive practice.</p>
+        <h1 className="font-serif text-3xl">{t("practice")}</h1>
+        <p className="mt-2 text-sm text-slate-muted">{t("selectCourse")}</p>
       </div>
     )
   }
@@ -97,7 +107,7 @@ export function Practice() {
     <div>
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-3xl">Practice</h1>
+          <h1 className="font-serif text-3xl">{t("practice")}</h1>
           <p className="mt-2 text-sm text-slate-muted">
             Adaptive practice for <span className="text-slate-ink">{selectedCourse.name}</span>.
           </p>
@@ -133,6 +143,7 @@ export function Practice() {
           <CardContent className="py-12 text-center">
             <Loader2 size={24} className="mx-auto mb-3 animate-spin text-coral" />
             <p className="text-sm text-slate-muted">Loading next question...</p>
+            {slowLoading && <div className="mt-4"><p className="text-xs text-slate-muted">AI generation is taking longer than expected. You can retry using only the existing question bank.</p><div className="mt-3 flex justify-center gap-2"><Button variant="outline" onClick={() => loadNext()}>Retry</Button><Button variant="coral" onClick={() => { setAllowAi(false); void loadNext(undefined, false) }}>Use question bank only</Button></div></div>}
           </CardContent>
         </Card>
       )}

@@ -204,6 +204,7 @@ def enqueue_document_job(course_id: str, document_id: str, user_id: Optional[str
         "course_id": course_id,
         "document_id": document_id,
         "user_id": user_id,
+        "source_type": "pdf",
         "status": JobStatus.QUEUED,
         "stage": JobStage.UPLOADED,
         "progress": 0,
@@ -225,6 +226,8 @@ def enqueue_text_job(course_id: str, document_id: str, text: str, user_id: Optio
         "course_id": course_id,
         "document_id": document_id,
         "user_id": user_id,
+        "source_type": "text",
+        "source_text": text,
         "status": JobStatus.QUEUED,
         "stage": JobStage.UPLOADED,
         "progress": 0,
@@ -305,6 +308,13 @@ def retry_job(job_id: str, user_id: Optional[str] = None) -> Optional[dict]:
     failed_job = next((j for j in jobs if j["id"] == job_id and j.get("status") == JobStatus.FAILED), None)
     if not failed_job:
         return None
+    if failed_job.get("user_id", "public") not in (user_id, "public"):
+        return None
+    if failed_job.get("source_type") == "text":
+        source_text = failed_job.get("source_text")
+        if not isinstance(source_text, str) or not source_text:
+            return None
+        return enqueue_text_job(failed_job["course_id"], failed_job["document_id"], source_text, user_id)
     return enqueue_document_job(failed_job["course_id"], failed_job["document_id"], user_id)
 
 

@@ -30,7 +30,7 @@ User credentials and endpoint choices remain in browser storage and are supplied
 
 Administrator discovery probes a small explicit port list and configured endpoints. It may access loopback and private addresses. User endpoints must use HTTP or HTTPS, contain no embedded credentials, and resolve only to permitted public addresses. Loopback, private, link-local, multicast, and metadata-service destinations are rejected to prevent SSRF. Redirect targets are validated as well.
 
-Supported discovery shapes are OpenAI-compatible `/v1/models` and Ollama `/api/tags`. A successful model listing does not imply generation success, so connection testing also performs a bounded completion request.
+Supported discovery shapes are OpenAI-compatible `/v1/models` and Ollama `/api/tags`. The compact connection test verifies reachability and model discovery without spending inference tokens; the first real generation remains the end-to-end acceptance check.
 
 ### Routing
 
@@ -51,7 +51,7 @@ Fallback that could send course or student content to a different provider is vi
 
 Cache only reusable, non-answer artifacts such as document parse results, course style summaries, and explicitly generated question requests. Student answer grading is not shared or globally cached.
 
-Persist a bounded stream of compute events containing timestamp, task type, provider, model, latency, outcome, fallback path, cache/rule hit, and token usage when returned by the provider. Never record API keys or full prompts. Aggregates expose actual request counts, success rate, latency, rule/cache savings, and estimated cost clearly labeled as estimated.
+Keep a bounded process-local stream of compute events containing timestamp, task type, provider, model, latency, outcome, fallback path, bank/rule hit, and token usage when returned by the provider. Never record API keys or full prompts. Aggregates expose actual request counts, success rate, latency, and rule/bank savings. This live demonstration telemetry resets on restart; durable operational telemetry is intentionally deferred until a production database and retention policy exist.
 
 ### SSH diagnostics
 

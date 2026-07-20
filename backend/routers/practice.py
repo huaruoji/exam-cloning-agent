@@ -3,11 +3,12 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
+from models.compute import ModelRequestConfig
 from models.student import StudentState
-from routers.deps import get_user_id
+from routers.deps import get_model_request_config, get_user_id
 from services.adaptive_engine import (
     get_current_difficulty,
     get_due_concepts,
@@ -17,7 +18,8 @@ from services.adaptive_engine import (
 from services.ingestion import get_course_profile
 from services.grader import grade
 from services.question_generator import generate_question
-from services.store import practice_history_table, questions_table, student_states_table
+from services.compute import record_bank_reuse
+from services.store import courses_table, practice_history_table, questions_table, student_states_table
 
 router = APIRouter(prefix="/api/practice", tags=["practice"])
 
@@ -88,15 +90,26 @@ class PracticeRequest(BaseModel):
 class AnswerSubmission(BaseModel):
     course_id: str
     question_id: str
-    answer: str = ""
-    concept: str | None = None
+    answer: str = Field(default="", max_length=20_000)
+    concept: str | None = Field(default=None, max_length=200)
     correct: bool | None = None
     action: str = "submit"  # submit | reveal | report | next
 
 
 @router.post("/next")
-async def get_next_question(request: PracticeRequest, user_id: str = Depends(get_user_id)):
+async def get_next_question(
+    request: PracticeRequest,
+    user_id: str = Depends(get_user_id),
+    model_config: ModelRequestConfig = Depends(get_model_request_config),
+):
     course_id = request.course_id
+    course = next(
+        (course for course in courses_table.load()
+         if course.get("id") == course_id and course.get("user_id", "public") in (user_id, "public")),
+        None,
+    )
+    if course is None:
+        raise HTTPException(status_code=404, detail="Course not found")
     state = _load_state(course_id, user_id)
 
     # Filter bank questions by user and course
@@ -161,6 +174,7 @@ async def get_next_question(request: PracticeRequest, user_id: str = Depends(get
             question_type=question_type,
             exam_style_description=style.get("description", ""),
             context=f"Course topics: {', '.join(knowledge.get('topics', [])[:15])}",
+            model_config=model_config,
         )
         if question is None:
             return {"source": None, "question": None}
@@ -175,21 +189,28 @@ async def get_next_question(request: PracticeRequest, user_id: str = Depends(get
     if not question:
         return {"source": None, "question": None}
 
+    if source == "bank":
+        await record_bank_reuse("practice")
+
     return {"source": source, "question": question}
 
 
 @router.post("/answer")
 async def submit_answer(
     submission: AnswerSubmission,
-    x_user_api_key: str | None = Header(default=None, alias="X-User-Api-Key"),
     user_id: str = Depends(get_user_id),
+    model_config: ModelRequestConfig = Depends(get_model_request_config),
 ):
     state = _load_state(submission.course_id, user_id)
     question = next(
         (q for q in questions_table.load()
-         if q.get("id") == submission.question_id),
+         if q.get("id") == submission.question_id
+         and q.get("course_id") == submission.course_id
+         and q.get("user_id", "public") in (user_id, "public")),
         None,
     )
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found")
     action = submission.action
 
     # Use the question's actual topic if concept isn't explicitly provided.
@@ -205,17 +226,17 @@ async def submit_answer(
     suggestion = ""
 
     if action == "submit":
-        if submission.correct is not None and question is None:
-            correct = submission.correct
-        elif question:
-            grading = await grade(question, submission.answer, user_api_key=x_user_api_key)
-            correct = grading["correct"]
-            feedback = grading["feedback"]
-            missing_steps = grading.get("missing_steps", [])
-            wrong_concepts = grading.get("wrong_concepts", [])
-            suggestion = grading.get("suggestion", "")
-        else:
-            correct = submission.correct or False
+        grading = await grade(
+            question,
+            submission.answer,
+            user_api_key=model_config.api_key,
+            model_config=model_config,
+        )
+        correct = grading["correct"]
+        feedback = grading["feedback"]
+        missing_steps = grading.get("missing_steps", [])
+        wrong_concepts = grading.get("wrong_concepts", [])
+        suggestion = grading.get("suggestion", "")
 
         # Update mastery on real attempts (pass confidence=3).
         if correct is not None:

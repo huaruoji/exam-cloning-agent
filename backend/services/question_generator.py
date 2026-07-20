@@ -2,6 +2,7 @@ import json
 import uuid
 from typing import Optional
 
+from models.compute import ModelRequestConfig
 from services.llm_client import call_llm, strip_json_fence
 
 
@@ -28,6 +29,8 @@ async def generate_question(
     exam_style_description: str = "",
     context: str = "",
     reference_questions: Optional[list[dict]] = None,
+    user_api_key: str | None = None,
+    model_config: ModelRequestConfig | None = None,
 ) -> dict:
     """Generate a new question based on topic, difficulty, and type.
 
@@ -71,7 +74,14 @@ Generate a new question in the same style."""
 - Exam style: {exam_style_description}
 - Context from course material: {context[:2000] if context else 'N/A'}"""
 
-    result = await call_llm(system_prompt, user_prompt, temperature=0.8)
+    result = await call_llm(
+        system_prompt,
+        user_prompt,
+        temperature=0.8,
+        user_api_key=user_api_key,
+        model_config=model_config,
+        operation="generate",
+    )
     result = strip_json_fence(result)
 
     try:

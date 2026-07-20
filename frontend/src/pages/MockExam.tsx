@@ -8,6 +8,7 @@ import { useLayoutContext } from "@/hooks/useLayoutContext"
 import { useToast } from "@/components/Toast"
 import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { useLanguage } from "@/i18n"
 
 const TYPE_LABELS: Record<string, string> = {
   mcq: "MCQ",
@@ -60,7 +61,14 @@ function normalizeDist(values: Record<string, number>): Record<string, number> {
   return result
 }
 
+function toPct(dist: Record<string, number>): Record<string, number> {
+  const result: Record<string, number> = {}
+  for (const [key, value] of Object.entries(dist)) result[key] = Math.round(value * 100)
+  return normalizeDist(result)
+}
+
 export function MockExam() {
+  const { t } = useLanguage()
   const { selectedCourse } = useLayoutContext()
   const { addToast } = useToast()
   const [exam, setExam] = useState<any>(null)
@@ -72,8 +80,6 @@ export function MockExam() {
   const [submitting, setSubmitting] = useState(false)
   const [examResults, setExamResults] = useState<any>(null)
   const [savedExams, setSavedExams] = useState<any[]>([])
-  const [showConfig, setShowConfig] = useState(false)
-  const [style, setStyle] = useState<any>(null)
   const [config, setConfig] = useState<ExamConfig>({
     numQuestions: 10,
     typeDistribution: null,
@@ -184,7 +190,6 @@ export function MockExam() {
     api.listExams(selectedCourse.id).then((r) => setSavedExams(r.exams)).catch(() => setSavedExams([]))
     api.getExamStyle(selectedCourse.id).then((r) => {
       const profile = r.profile?.style_profile || null
-      setStyle(profile)
       if (profile) {
         const tPct = toPct(profile.question_type_distribution || {})
         const dPct = toPct(profile.difficulty_distribution || {})
@@ -193,16 +198,8 @@ export function MockExam() {
         setInitialTypePct({ ...tPct })
         setInitialDiffPct({ ...dPct })
       }
-    }).catch(() => setStyle(null))
+    }).catch(() => {})
   }, [selectedCourse])
-
-  function toPct(dist: Record<string, number>): Record<string, number> {
-    const result: Record<string, number> = {}
-    for (const [k, v] of Object.entries(dist)) {
-      result[k] = Math.round(v * 100)
-    }
-    return normalizeDist(result)
-  }
 
   const generate = async () => {
     if (!selectedCourse) return
@@ -235,7 +232,6 @@ export function MockExam() {
       setStartedAt(Date.now())
       setElapsed(0)
       setLastSavedKey("")
-      setShowConfig(false)
       addToast("Exam generated", "success")
       api.listExams(selectedCourse.id).then((r) => setSavedExams(r.exams)).catch(() => {})
     } catch (e: any) {
@@ -344,8 +340,8 @@ export function MockExam() {
   if (!selectedCourse) {
     return (
       <div>
-        <h1 className="font-serif text-3xl">Mock Exam</h1>
-        <p className="mt-2 text-sm text-slate-muted">Select a course before generating a mock exam.</p>
+        <h1 className="font-serif text-3xl">{t("exam")}</h1>
+        <p className="mt-2 text-sm text-slate-muted">{t("selectCourse")}</p>
       </div>
     )
   }
@@ -371,14 +367,14 @@ export function MockExam() {
   if (!exam) {
     return (
       <div>
-        <h1 className="font-serif text-3xl">Mock Exam</h1>
+        <h1 className="font-serif text-3xl">{t("exam")}</h1>
         <p className="mt-2 text-sm text-slate-muted">Generate a paper that imitates the style profile of {selectedCourse.name}.</p>
 
         {/* Saved exams */}
         {savedExams.length > 0 && (
           <Card className="mt-6">
             <CardHeader>
-              <CardTitle>Saved exams</CardTitle>
+              <CardTitle>{t("savedExams")}</CardTitle>
               <CardDescription>Resume an unfinished exam or review a completed one.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -468,8 +464,14 @@ export function MockExam() {
                 <span>Bank questions {config.bankRatio}%</span>
                 <span>AI generated {100 - config.bankRatio}%</span>
               </div>
+              <p className="mt-2 rounded-lg bg-coral/5 px-3 py-2 text-xs text-slate-muted">
+                Estimated AI calls: <span className="font-mono font-medium text-slate-ink">{Math.ceil(config.numQuestions * (100 - config.bankRatio) / 100)}</span> · remaining questions reuse the bank
+              </p>
             </div>
 
+            <details className="rounded-xl border border-border bg-ivory px-4 py-3">
+              <summary className="cursor-pointer text-sm font-medium">Advanced composition</summary>
+              <div className="mt-4 space-y-5 border-t border-border pt-4">
             {/* Interactive type distribution */}
             {Object.keys(typePct).length > 0 && (
               <div>
@@ -533,8 +535,10 @@ export function MockExam() {
                 className="min-h-[80px] w-full rounded-xl border border-border bg-ivory px-4 py-3 text-sm outline-none"
               />
             </div>
+              </div>
+            </details>
 
-            <Button variant="coral" onClick={generate}>Generate mock exam</Button>
+            <Button variant="coral" onClick={generate}>{t("generateExam")}</Button>
           </CardContent>
         </Card>
       </div>
@@ -549,7 +553,7 @@ export function MockExam() {
     const wrongCount = examResults?.results?.filter((r: any) => !r.correct).length ?? 0
     return (
       <div>
-        <h1 className="font-serif text-3xl">Mock Exam Results</h1>
+        <h1 className="font-serif text-3xl">{t("examResults")}</h1>
         {examResults ? (
           <>
             <div className="mt-4 flex items-center gap-6">
@@ -678,7 +682,7 @@ export function MockExam() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-serif text-3xl">Mock Exam</h1>
+          <h1 className="font-serif text-3xl">{t("exam")}</h1>
           <p className="mt-2 text-sm text-slate-muted">{selectedCourse.name}</p>
         </div>
         <div className="flex items-center gap-3">
