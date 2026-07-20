@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import re
@@ -6,27 +7,21 @@ from typing import Iterable
 
 import pdfplumber
 
-from services.llm_client import call_llm
+from models.question import Question
+from services.llm_client import call_llm, strip_json_fence
 
 
-def _strip_json_fence(result: str) -> str:
-    result = result.strip()
-    if result.startswith("```"):
-        result = result.split("\n", 1)[1] if "\n" in result else result[3:]
-    if result.endswith("```"):
-        result = result[:-3]
-    result = result.strip()
-    if result.startswith("json"):
-        result = result[4:].strip()
-    return result
-
-
-async def extract_pages_from_pdf(pdf_path: str) -> list[str]:
+def _extract_pages_sync(pdf_path: str) -> list[str]:
     pages: list[str] = []
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
             pages.append(page.extract_text() or "")
     return pages
+
+
+async def extract_pages_from_pdf(pdf_path: str) -> list[str]:
+    """Run the blocking pdfplumber extraction in a worker thread."""
+    return await asyncio.to_thread(_extract_pages_sync, pdf_path)
 
 
 def detect_course_name(title: str, pages: list[str]) -> str | None:
@@ -47,6 +42,31 @@ def detect_course_name(title: str, pages: list[str]) -> str | None:
             if match:
                 return match.group(1).strip()
     return None
+
+
+def _normalize_question(q: dict, source_pdf: str, source_document_id: str | None,
+                        course_id: str | None, source_type: str | None) -> dict | None:
+    """Validate via Pydantic and attach bookkeeping fields. Returns None on invalid."""
+    if not isinstance(q, dict) or "content" not in q:
+        return None
+    payload = {
+        "id": str(uuid.uuid4())[:8],
+        "source_pdf": source_pdf,
+        "source_document_id": source_document_id,
+        "course_id": course_id,
+        "source_type": source_type,
+        "content": q.get("content", ""),
+        "question_type": q.get("question_type", "short_answer"),
+        "difficulty": q.get("difficulty", "medium"),
+        "topic": q.get("topic", "general"),
+        "options": q.get("options"),
+        "answer": q.get("answer", "") or "",
+        "explanation": q.get("explanation", "") or "",
+    }
+    try:
+        return Question(**payload).model_dump(mode="json")
+    except Exception:
+        return None
 
 
 async def parse_questions_from_text(
@@ -70,36 +90,36 @@ Each question object must have:
 Rules:
 - Ignore cover pages, instructions, grading policy, and purely explanatory slide text.
 - If a document is slides, only extract explicit exercise/example problems.
+- For MCQ, put the option letter in \"answer\" (e.g. \"A\").
 - Return ONLY valid JSON array, no markdown code blocks."""
 
     user_prompt = f"Parse the following educational document text into structured questions:\n\n{text[:12000]}"
 
-    # Retry up to 2 times on parse failure
+    questions = None
     for attempt in range(3):
         result = await call_llm(system_prompt, user_prompt, temperature=0.2 if attempt == 0 else 0.1)
-        result = _strip_json_fence(result)
-
+        result = strip_json_fence(result)
         try:
-            questions = json.loads(result)
-            if isinstance(questions, list):
+            parsed = json.loads(result)
+            if isinstance(parsed, list):
+                questions = parsed
+                break
+            else:
+                # JSON parsed but not a list — don't waste retries
                 break
         except json.JSONDecodeError:
             if attempt == 2:
-                return []  # Final attempt failed
+                return []
             continue
-    else:
+
+    if not questions:
         return []
 
     normalized: list[dict] = []
     for q in questions:
-        if not isinstance(q, dict) or "content" not in q:
-            continue
-        q["id"] = str(uuid.uuid4())[:8]
-        q["source_pdf"] = source_pdf
-        q["source_document_id"] = source_document_id
-        q["course_id"] = course_id
-        q["source_type"] = source_type
-        normalized.append(q)
+        item = _normalize_question(q, source_pdf, source_document_id, course_id, source_type)
+        if item:
+            normalized.append(item)
     return normalized
 
 
@@ -149,7 +169,7 @@ async def analyze_exam_style(questions: list[dict]) -> dict:
 Return ONLY valid JSON, no markdown code blocks."""
     user_prompt = f"Analyze the style of these questions:\n\n{json.dumps(questions, ensure_ascii=False)[:10000]}"
     result = await call_llm(system_prompt, user_prompt, temperature=0.2)
-    result = _strip_json_fence(result)
+    result = strip_json_fence(result)
 
     try:
         return json.loads(result)

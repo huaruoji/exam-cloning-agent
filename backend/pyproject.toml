@@ -1,12 +1,11 @@
 [project]
-name = "exam-cloning-agent-backend"
-version = "0.1.0"
-description = "FastAPI backend for the Exam Cloning Agent"
+name = "exam-cloner-backend"
+version = "0.5.2"
+description = "FastAPI backend for Exam Cloner"
 requires-python = ">=3.10"
 dependencies = [
   "aiofiles==24.1.0",
   "fastapi==0.115.12",
-  "fsrs==6.3.1",
   "httpx==0.28.1",
   "pdfplumber==0.11.6",
   "pydantic==2.11.4",
@@ -17,3 +16,9 @@ dependencies = [
 
 [tool.uv]
 package = false
+
+[dependency-groups]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.25"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

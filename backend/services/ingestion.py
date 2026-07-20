@@ -1,7 +1,7 @@
 import asyncio
 import uuid
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from models.document import DocumentStatus, DocumentType
@@ -11,6 +11,7 @@ from services.pdf_parser import (
     detect_course_name,
     extract_pages_from_pdf,
     parse_questions_from_pages,
+    parse_questions_from_text,
 )
 from services.store import (
     documents_table,
@@ -25,33 +26,27 @@ active_tasks: dict[str, asyncio.Task] = {}
 
 
 def _utcnow() -> str:
-    return datetime.utcnow().isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _update_job(job_id: str, **updates):
-    jobs = jobs_table.load()
-    for job in jobs:
-        if job["id"] == job_id:
-            job.update(updates)
-            job["updated_at"] = _utcnow()
-            break
-    jobs_table.save(jobs)
+    jobs_table.mutate(lambda jobs: _update_in_list(jobs, "id", job_id, updates))
 
 
 def _update_document(document_id: str, **updates):
-    documents = documents_table.load()
-    for document in documents:
-        if document["id"] == document_id:
-            document.update(updates)
-            document["updated_at"] = _utcnow()
+    documents_table.mutate(lambda docs: _update_in_list(docs, "id", document_id, updates))
+
+
+def _update_in_list(items: list, key: str, value: str, updates: dict):
+    for item in items:
+        if item.get(key) == value:
+            item.update(updates)
+            item["updated_at"] = _utcnow()
             break
-    documents_table.save(documents)
 
 
 def _append_questions(new_questions: list[dict]):
-    questions = questions_table.load()
-    questions.extend(new_questions)
-    questions_table.save(questions)
+    questions_table.mutate(lambda qs: qs.extend(new_questions))
 
 
 def _aggregate_course_profile(course_id: str):
@@ -159,18 +154,8 @@ async def process_document_job(job_id: str):
             _update_job(job_id, stage=JobStage.INDEXING_MATERIALS, progress=85, message="Updating course profile")
             _aggregate_course_profile(document["course_id"])
 
-            profiles = profiles_table.load()
-            for profile in profiles:
-                if profile["course_id"] == document["course_id"]:
-                    profile.setdefault("document_profiles", []).append(
-                        {
-                            "document_id": document_id,
-                            "document_type": document["document_type"],
-                            "style_profile": style_profile,
-                        }
-                    )
-                    break
-            profiles_table.save(profiles)
+            # Dedup document_profiles by document_id
+            profiles_table.mutate(lambda profiles: _upsert_document_profile(profiles, document_id, document, style_profile))
             _update_job(
                 job_id,
                 status=JobStatus.COMPLETED,
@@ -192,11 +177,33 @@ async def process_document_job(job_id: str):
             active_tasks.pop(job_id, None)
 
 
-def enqueue_document_job(course_id: str, document_id: str) -> dict:
+def _upsert_document_profile(profiles: list, document_id: str, document: dict, style_profile: dict):
+    """Add or replace document_profile entry for the given document_id."""
+    for profile in profiles:
+        if profile["course_id"] == document["course_id"]:
+            doc_profiles = profile.setdefault("document_profiles", [])
+            for i, dp in enumerate(doc_profiles):
+                if dp.get("document_id") == document_id:
+                    doc_profiles[i] = {
+                        "document_id": document_id,
+                        "document_type": document["document_type"],
+                        "style_profile": style_profile,
+                    }
+                    return
+            doc_profiles.append({
+                "document_id": document_id,
+                "document_type": document["document_type"],
+                "style_profile": style_profile,
+            })
+            return
+
+
+def enqueue_document_job(course_id: str, document_id: str, user_id: Optional[str] = None) -> dict:
     job = {
         "id": uuid.uuid4().hex[:10],
         "course_id": course_id,
         "document_id": document_id,
+        "user_id": user_id,
         "status": JobStatus.QUEUED,
         "stage": JobStage.UPLOADED,
         "progress": 0,
@@ -211,5 +218,111 @@ def enqueue_document_job(course_id: str, document_id: str) -> dict:
     return job
 
 
+def enqueue_text_job(course_id: str, document_id: str, text: str, user_id: Optional[str] = None) -> dict:
+    """Enqueue a job that parses text directly (no PDF)."""
+    job = {
+        "id": uuid.uuid4().hex[:10],
+        "course_id": course_id,
+        "document_id": document_id,
+        "user_id": user_id,
+        "status": JobStatus.QUEUED,
+        "stage": JobStage.UPLOADED,
+        "progress": 0,
+        "message": "Queued",
+        "error": None,
+        "created_at": _utcnow(),
+        "updated_at": _utcnow(),
+    }
+    jobs_table.append(job)
+    task = asyncio.create_task(process_text_job(job["id"], text))
+    active_tasks[job["id"]] = task
+    return job
+
+
+async def process_text_job(job_id: str, text: str):
+    """Process a text-only job (no PDF to extract)."""
+    async with _job_semaphore:
+        jobs = jobs_table.load()
+        job = next(j for j in jobs if j["id"] == job_id)
+        document_id = job["document_id"]
+        documents = documents_table.load()
+        document = next(d for d in documents if d["id"] == document_id)
+
+        try:
+            _update_job(job_id, status=JobStatus.RUNNING, stage=JobStage.EXTRACTING_TEXT, progress=10, message="Processing text input")
+            _update_document(document_id, status=DocumentStatus.PROCESSING)
+
+            _update_job(job_id, stage=JobStage.PARSING_QUESTIONS, progress=35, message="Parsing question structure")
+            parsed_questions = await parse_questions_from_text(
+                text=text,
+                source_pdf="",
+                source_document_id=document_id,
+                course_id=document["course_id"],
+                source_type=document["document_type"],
+            )
+
+            _update_job(job_id, stage=JobStage.ANALYZING_STYLE, progress=70, message="Aggregating style profile")
+            style_source_questions = [
+                q for q in parsed_questions if document["document_type"] in {DocumentType.PAST_EXAM.value, DocumentType.HOMEWORK.value}
+            ]
+            style_profile = await analyze_exam_style(style_source_questions or parsed_questions)
+
+            _append_questions(parsed_questions)
+
+            warning = ""
+            if not parsed_questions:
+                warning = " Warning: 0 questions were extracted."
+
+            _update_document(document_id, status=DocumentStatus.COMPLETED)
+            _update_job(job_id, stage=JobStage.INDEXING_MATERIALS, progress=85, message="Updating course profile")
+            _aggregate_course_profile(document["course_id"])
+
+            profiles_table.mutate(lambda profiles: _upsert_document_profile(profiles, document_id, document, style_profile))
+            _update_job(
+                job_id,
+                status=JobStatus.COMPLETED,
+                stage=JobStage.COMPLETED,
+                progress=100,
+                message=f"Completed: {len(parsed_questions)} questions parsed{warning}",
+            )
+        except Exception as exc:
+            _update_document(document_id, status=DocumentStatus.FAILED)
+            _update_job(
+                job_id,
+                status=JobStatus.FAILED,
+                stage=JobStage.FAILED,
+                progress=100,
+                message="Processing failed",
+                error=str(exc),
+            )
+        finally:
+            active_tasks.pop(job_id, None)
+
+
+def retry_job(job_id: str, user_id: Optional[str] = None) -> Optional[dict]:
+    """Create a new job for the same document as a FAILED job. Returns new job or None."""
+    jobs = jobs_table.load()
+    failed_job = next((j for j in jobs if j["id"] == job_id and j.get("status") == JobStatus.FAILED), None)
+    if not failed_job:
+        return None
+    return enqueue_document_job(failed_job["course_id"], failed_job["document_id"], user_id)
+
+
 def get_course_profile(course_id: str) -> Optional[dict]:
     return next((p for p in profiles_table.load() if p["course_id"] == course_id), None)
+
+
+def recover_stuck_jobs():
+    """On startup, mark any queued/running jobs as failed (their in-memory tasks are gone)."""
+    jobs = jobs_table.load()
+    changed = False
+    for job in jobs:
+        if job.get("status") in {JobStatus.QUEUED, JobStatus.RUNNING}:
+            job["status"] = JobStatus.FAILED
+            job["stage"] = JobStage.FAILED
+            job["message"] = "Interrupted by server restart"
+            job["error"] = "Server restarted while job was in progress"
+            job["updated_at"] = _utcnow()
+            changed = True
+    if changed:
+        jobs_table.save(jobs)

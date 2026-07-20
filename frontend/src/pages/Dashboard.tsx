@@ -1,9 +1,19 @@
 import { useEffect, useState } from "react"
-import { BookOpen, Clock3, FolderOpen, TrendingUp } from "lucide-react"
+import { BookOpen, Clock3, FolderOpen, Sparkles, TrendingUp } from "lucide-react"
+import {
+  Radar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  ResponsiveContainer,
+} from "recharts"
 
+import { Button } from "@/components/Button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/Card"
 import { api } from "@/lib/api"
 import { useLayoutContext } from "@/hooks/useLayoutContext"
+import { useToast } from "@/components/Toast"
 
 interface Stats {
   total_questions_in_bank: number
@@ -17,22 +27,49 @@ interface Stats {
 }
 
 export function Dashboard() {
-  const { selectedCourse } = useLayoutContext()
+  const { selectedCourse, refreshCourses, selectCourse } = useLayoutContext()
+  const { addToast } = useToast()
   const [stats, setStats] = useState<Stats | null>(null)
+  const [reviewStats, setReviewStats] = useState<any>(null)
 
   useEffect(() => {
     if (!selectedCourse) {
       setStats(null)
+      setReviewStats(null)
       return
     }
     api.getStats(selectedCourse.id).then(setStats).catch(() => setStats(null))
+    api.getReviewStats(selectedCourse.id).then(setReviewStats).catch(() => setReviewStats(null))
   }, [selectedCourse])
+
+  const seedDemo = async () => {
+    try {
+      const res = await api.seedDemo()
+      if (res.status === "exists") addToast("Demo course already loaded", "info")
+      else addToast(`Demo loaded: ${res.questions_loaded} questions`, "success")
+      await refreshCourses()
+      if (res.course) selectCourse(res.course.id)
+    } catch (e: any) {
+      addToast(e.message || "Failed to load demo", "error")
+    }
+  }
 
   if (!selectedCourse) {
     return (
-      <div>
+      <div className="flex flex-col items-center justify-center py-16">
         <h1 className="font-serif text-3xl">Overview</h1>
-        <p className="mt-2 text-sm text-slate-muted">Create or select a course to start building a workspace.</p>
+        <p className="mt-2 text-sm text-slate-muted">Create a course above, or load a ready-made demo to explore the full experience.</p>
+        <Button
+          onClick={seedDemo}
+          variant="coral"
+          size="lg"
+          className="mt-8 text-base"
+        >
+          <Sparkles size={20} /> Load demo course (AIAA 2711)
+        </Button>
+        <p className="mt-4 max-w-md text-center text-xs text-slate-muted">
+          The demo seeds 30+ curated questions across 8 topics with a style profile ready for practice and mock exams.
+        </p>
       </div>
     )
   }
@@ -48,6 +85,26 @@ export function Dashboard() {
     },
   ]
 
+  // Streak / today row
+  const todayCount = reviewStats?.daily?.length
+    ? reviewStats.daily.reduce((sum: number, d: any) => {
+        const today = new Date().toISOString().slice(0, 10)
+        return d.date === today ? sum + (d.count || 0) : sum
+      }, 0)
+    : 0
+
+  const topicStats = reviewStats?.topic_stats ?? []
+  const bestTopic = topicStats.length
+    ? topicStats.reduce((best: any, curr: any) => (curr.accuracy > (best?.accuracy || 0) ? curr : best), null)
+    : null
+  const weakestTopic = topicStats.length
+    ? topicStats.reduce((weak: any, curr: any) => (curr.accuracy < (weak?.accuracy || 1) ? curr : weak), null)
+    : null
+
+  const masteryData = Object.entries(stats?.concept_mastery ?? {})
+    .map(([concept, data]) => ({ topic: concept, score: Math.round(data.score * 100) }))
+    .slice(0, 8)
+
   return (
     <div>
       <p className="text-[11px] uppercase tracking-[0.16em] text-slate-muted">Course workspace</p>
@@ -57,6 +114,34 @@ export function Dashboard() {
         practice workspace. Parsing happens in the background, then the course profile is
         updated automatically.
       </p>
+
+      {/* Streak / today row */}
+      <div className="mt-6 grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardContent className="text-center">
+            <p className="text-2xl font-semibold">{todayCount}</p>
+            <p className="text-xs text-slate-muted">Questions today</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="text-center">
+            <p className="text-2xl font-semibold">{stats ? `${Math.round((stats.accuracy ?? 0) * 100)}%` : "—"}</p>
+            <p className="text-xs text-slate-muted">Overall accuracy</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="text-center">
+            <p className="text-2xl font-semibold truncate">{bestTopic ? bestTopic.topic : "—"}</p>
+            <p className="text-xs text-slate-muted">Best topic</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="text-center">
+            <p className="text-2xl font-semibold truncate">{weakestTopic ? weakestTopic.topic : "—"}</p>
+            <p className="text-xs text-slate-muted">Weakest topic</p>
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {statCards.map(({ label, value, icon: Icon }) => (
@@ -116,6 +201,26 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {masteryData.length >= 3 && (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle>Concept mastery radar</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[320px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={masteryData}>
+                  <PolarGrid stroke="var(--color-border)" />
+                  <PolarAngleAxis dataKey="topic" tick={{ fontSize: 11, fill: "var(--color-slate-muted)" }} />
+                  <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "var(--color-slate-light)" }} />
+                  <Radar dataKey="score" stroke="var(--color-coral)" fill="var(--color-coral)" fillOpacity={0.3} />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {stats?.concept_mastery && Object.keys(stats.concept_mastery).length > 0 && (
         <Card className="mt-4">

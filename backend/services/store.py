@@ -1,7 +1,9 @@
 import json
+import os
+import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from config import DATA_DIR
 
@@ -18,6 +20,7 @@ def _serialize(value: Any):
 class JsonTable:
     def __init__(self, filename: str):
         self.path = DATA_PATH / filename
+        self._lock = threading.Lock()
 
     def load(self) -> list[dict]:
         if not self.path.exists():
@@ -26,13 +29,23 @@ class JsonTable:
             return json.load(f)
 
     def save(self, items: list[dict]):
-        with self.path.open("w", encoding="utf-8") as f:
+        tmp_path = self.path.with_suffix(self.path.suffix + ".tmp")
+        with tmp_path.open("w", encoding="utf-8") as f:
             json.dump(items, f, ensure_ascii=False, indent=2, default=_serialize)
+        os.replace(str(tmp_path), str(self.path))
 
     def append(self, item: dict):
-        items = self.load()
-        items.append(item)
-        self.save(items)
+        with self._lock:
+            items = self.load()
+            items.append(item)
+            self.save(items)
+
+    def mutate(self, fn: Callable[[list[dict]], None]):
+        """Load, call fn(list), save — all under lock."""
+        with self._lock:
+            items = self.load()
+            fn(items)
+            self.save(items)
 
 
 courses_table = JsonTable("courses.json")
@@ -41,3 +54,5 @@ jobs_table = JsonTable("jobs.json")
 questions_table = JsonTable("questions.json")
 profiles_table = JsonTable("course_profiles.json")
 student_states_table = JsonTable("student_states.json")
+practice_history_table = JsonTable("practice_history.json")
+exams_table = JsonTable("exams.json")

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -22,16 +22,17 @@ class DocumentStatus(str, Enum):
 class Document(BaseModel):
     id: str
     course_id: str
+    user_id: Optional[str] = None
     title: str
     original_filename: str
-    stored_filename: str
-    file_path: str
+    stored_filename: Optional[str] = None
+    file_path: Optional[str] = None
     document_type: DocumentType
     status: DocumentStatus = DocumentStatus.UPLOADED
     detected_course_name: Optional[str] = None
     page_count: int = 0
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class DocumentUpdate(BaseModel):

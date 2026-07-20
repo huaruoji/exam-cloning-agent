@@ -20,6 +20,7 @@ class QuestionType(str, Enum):
 class Question(BaseModel):
     id: str
     course_id: Optional[str] = None
+    user_id: Optional[str] = None
     source_document_id: Optional[str] = None
     source_type: Optional[str] = None
     content: str  # supports LaTeX with $...$ and $$...$$
@@ -31,9 +32,3 @@ class Question(BaseModel):
     explanation: str
     source_pdf: Optional[str] = None
     source_page: Optional[int] = None
-
-
-class QuestionFilter(BaseModel):
-    topic: Optional[str] = None
-    difficulty: Optional[Difficulty] = None
-    question_type: Optional[QuestionType] = None

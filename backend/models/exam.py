@@ -15,6 +15,8 @@ class ExamStyleProfile(BaseModel):
 class Exam(BaseModel):
     id: str
     title: str
+    user_id: Optional[str] = None
+    course_id: Optional[str] = None
     style_profile: ExamStyleProfile
     questions: list[Question]
     time_limit_minutes: Optional[int] = None

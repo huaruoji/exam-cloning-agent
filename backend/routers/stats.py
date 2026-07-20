@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
+from routers.deps import get_user_id
 from services.ingestion import get_course_profile
 from services.store import questions_table, student_states_table
 
@@ -7,10 +8,17 @@ router = APIRouter(prefix="/api/stats", tags=["stats"])
 
 
 @router.get("")
-async def get_stats(course_id: str = Query(...)):
-    state_row = next((row for row in student_states_table.load() if row["course_id"] == course_id), None)
+async def get_stats(course_id: str = Query(...), user_id: str = Depends(get_user_id)):
+    state_row = next(
+        (row for row in student_states_table.load()
+         if row["course_id"] == course_id and row.get("user_id", "public") == user_id),
+        None,
+    )
     state = (state_row or {}).get("state", {})
-    questions = [q for q in questions_table.load() if q.get("course_id") == course_id]
+    questions = [
+        q for q in questions_table.load()
+        if q.get("course_id") == course_id and q.get("user_id", "public") in (user_id, "public")
+    ]
     profile = get_course_profile(course_id) or {}
 
     attempted = state.get("total_questions_attempted", 0)

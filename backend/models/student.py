@@ -13,6 +13,7 @@ class ConceptMastery(BaseModel):
     next_review: Optional[datetime] = None
     stability: float = 1.0
     difficulty: float = 5.0
+    ease_factor: float = 2.5
 
 
 class StudentState(BaseModel):

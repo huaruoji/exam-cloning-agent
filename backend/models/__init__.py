@@ -1,4 +1,4 @@
-from .question import Question, QuestionFilter, Difficulty, QuestionType
+from .question import Question, Difficulty, QuestionType
 from .exam import Exam, ExamStyleProfile
 from .student import StudentState, ConceptMastery
 from .course import Course, CourseCreate, CourseUpdate
