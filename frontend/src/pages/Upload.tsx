@@ -6,13 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useLayoutContext } from "@/hooks/useLayoutContext"
 import { useToast } from "@/components/Toast"
 import { api, type DocumentRecord, type JobRecord } from "@/lib/api"
-import { useLanguage } from "@/i18n"
+import { useLanguage, type MessageKey } from "@/i18n"
 
-const documentTypes = [
-  { value: "past_exam", label: "Past exam" },
-  { value: "homework", label: "Written homework" },
-  { value: "slides", label: "Slides / lecture notes" },
-  { value: "reference_pdf", label: "Reference PDF" },
+const documentTypes: { value: string; label: MessageKey }[] = [
+  { value: "past_exam", label: "docPastExam" },
+  { value: "homework", label: "docHomework" },
+  { value: "slides", label: "docSlides" },
+  { value: "reference_pdf", label: "docReferencePdf" },
 ]
 
 export function Upload() {
@@ -35,13 +35,21 @@ export function Upload() {
 
   const loadMaterials = useCallback(async () => {
     if (!selectedCourse) return
-    const [docs, jobRes] = await Promise.all([
+    const results = await Promise.allSettled([
       api.listDocuments(selectedCourse.id),
       api.listJobs(selectedCourse.id),
     ])
-    setDocuments(docs.documents)
-    setJobs(jobRes.jobs)
-  }, [selectedCourse])
+    if (results[0].status === "fulfilled") {
+      setDocuments(results[0].value.documents)
+    } else {
+      addToast("Failed to load documents", "error")
+    }
+    if (results[1].status === "fulfilled") {
+      setJobs(results[1].value.jobs)
+    } else {
+      addToast("Failed to load jobs", "error")
+    }
+  }, [selectedCourse, addToast])
 
   useEffect(() => {
     if (!selectedCourse) {
@@ -169,7 +177,7 @@ export function Upload() {
           </CardHeader>
           <CardContent>
             <div className="mb-4">
-              <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-slate-muted">Document type</label>
+              <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-slate-muted">{t("docType")}</label>
               <select
                 value={documentType}
                 onChange={(e) => setDocumentType(e.target.value)}
@@ -177,7 +185,7 @@ export function Upload() {
               >
                 {documentTypes.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {t(option.label)}
                   </option>
                 ))}
               </select>

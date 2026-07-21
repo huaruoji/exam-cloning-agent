@@ -8,7 +8,7 @@ import { useLayoutContext } from "@/hooks/useLayoutContext"
 import { useToast } from "@/components/Toast"
 import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
-import { useLanguage } from "@/i18n"
+import { useLanguage, type MessageKey } from "@/i18n"
 
 const TYPE_LABELS: Record<string, string> = {
   mcq: "MCQ",
@@ -19,10 +19,10 @@ const TYPE_LABELS: Record<string, string> = {
   "true_false": "True/False",
 }
 
-const DIFF_LABELS: Record<string, string> = {
-  easy: "Easy",
-  medium: "Medium",
-  hard: "Hard",
+const DIFF_LABELS: Record<string, MessageKey> = {
+  easy: "diffEasy",
+  medium: "diffMedium",
+  hard: "diffHard",
 }
 
 function label(key: string, map: Record<string, string>): string {
@@ -38,33 +38,37 @@ interface ExamConfig {
   bankRatio: number
 }
 
-function normalizeDist(values: Record<string, number>): Record<string, number> {
+function normalizePreservingOrder(values: Record<string, number>): Record<string, number> {
   const entries = Object.entries(values)
   const sum = entries.reduce((s, [, v]) => s + v, 0)
   if (sum === 0) return values
 
   const result: Record<string, number> = {}
   let total = 0
-  const sorted = [...entries].sort((a, b) => b[1] - a[1])
 
-  for (const [k, v] of sorted) {
+  for (const [k, v] of entries) {
     const pct = Math.round((v / sum) * 100)
     result[k] = pct
     total += pct
   }
 
   const diff = 100 - total
-  if (diff !== 0 && sorted.length > 0) {
-    result[sorted[0][0]] = Math.max(0, result[sorted[0][0]] + diff)
+  if (diff !== 0 && entries.length > 0) {
+    result[entries[0][0]] = Math.max(0, result[entries[0][0]] + diff)
   }
 
   return result
 }
 
+function normalizeSorted(values: Record<string, number>): Record<string, number> {
+  const sorted = Object.entries(values).sort((a, b) => b[1] - a[1])
+  return normalizePreservingOrder(Object.fromEntries(sorted))
+}
+
 function toPct(dist: Record<string, number>): Record<string, number> {
   const result: Record<string, number> = {}
   for (const [key, value] of Object.entries(dist)) result[key] = Math.round(value * 100)
-  return normalizeDist(result)
+  return normalizeSorted(result)
 }
 
 export function MockExam() {
@@ -100,6 +104,7 @@ export function MockExam() {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   // Ref-based save callback to avoid stale closures in intervals
   const doSaveRef = useRef<() => Promise<void>>(async () => {})
@@ -147,11 +152,12 @@ export function MockExam() {
     }
   }, [addToast])
 
-  // Clear timers on unmount
+  // Clear timers and abort any in-flight generation on unmount
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
       if (saveTimerRef.current) clearInterval(saveTimerRef.current)
+      abortControllerRef.current?.abort()
     }
   }, [])
 
@@ -173,16 +179,18 @@ export function MockExam() {
     doSaveRef.current()
   }, [currentIndex])
 
+  const examId = exam?.id
+
   // Auto-save every 30 seconds
   useEffect(() => {
-    if (!exam || submitted || startedAt === null) return
+    if (!examId || submitted || startedAt === null) return
     saveTimerRef.current = setInterval(() => {
       doSaveRef.current()
     }, 30000)
     return () => {
       if (saveTimerRef.current) clearInterval(saveTimerRef.current)
     }
-  }, [exam?.id, submitted, startedAt])
+  }, [examId, submitted, startedAt])
 
   // Load saved exams + style profile
   useEffect(() => {
@@ -203,6 +211,9 @@ export function MockExam() {
 
   const generate = async () => {
     if (!selectedCourse) return
+    abortControllerRef.current?.abort() // cancel any previous generation
+    const controller = new AbortController()
+    abortControllerRef.current = controller
     setGenerating(true)
     setProgress({ done: 0, total: config.numQuestions })
     setSubmitted(false)
@@ -225,7 +236,7 @@ export function MockExam() {
         timeLimitMinutes: config.timeLimitMinutes > 0 ? config.timeLimitMinutes : undefined,
         bankRatio: config.bankRatio,
         onProgress: (done, total) => setProgress({ done, total }),
-      })
+      }, controller.signal)
       setExam(result)
       setCurrentIndex(0)
       setAnswers({})
@@ -235,6 +246,7 @@ export function MockExam() {
       addToast("Exam generated", "success")
       api.listExams(selectedCourse.id).then((r) => setSavedExams(r.exams)).catch(() => {})
     } catch (e: any) {
+      if (e.name === 'AbortError') return
       addToast(e.message || "Failed to generate exam", "error")
     } finally {
       setGenerating(false)
@@ -328,13 +340,13 @@ export function MockExam() {
   const handleTypeDelta = (key: string, delta: number) => {
     const next = { ...typePct }
     next[key] = Math.max(0, (next[key] || 0) + delta)
-    setTypePct(normalizeDist(next))
+    setTypePct(normalizePreservingOrder(next))
   }
 
   const handleDiffDelta = (key: string, delta: number) => {
     const next = { ...diffPct }
     next[key] = Math.max(0, (next[key] || 0) + delta)
-    setDiffPct(normalizeDist(next))
+    setDiffPct(normalizePreservingOrder(next))
   }
 
   if (!selectedCourse) {
@@ -395,13 +407,13 @@ export function MockExam() {
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => resumeExam(e.id)}>
-                      {e.status === "completed" ? "Review" : "Resume"}
+                      {e.status === "completed" ? t("reviewExam") : t("resume")}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={async () => {
                       await api.deleteExam(e.id)
                       setSavedExams((prev) => prev.filter((x) => x.id !== e.id))
                     }}>
-                      Delete
+                      {t("delete")}
                     </Button>
                   </div>
                 </div>
@@ -506,7 +518,7 @@ export function MockExam() {
                 <div className="space-y-2">
                   {Object.entries(diffPct).map(([k, v]) => (
                     <div key={k} className="flex items-center gap-2">
-                      <span className="w-24 shrink-0 text-sm text-slate-muted">{label(k, DIFF_LABELS)}</span>
+                      <span className="w-24 shrink-0 text-sm text-slate-muted">{t(DIFF_LABELS[k])}</span>
                       <div className="h-2 flex-1 overflow-hidden rounded-full bg-ivory-deep">
                         <div className="h-full rounded-full bg-coral transition-all" style={{ width: `${v}%` }} />
                       </div>
@@ -559,16 +571,16 @@ export function MockExam() {
             <div className="mt-4 flex items-center gap-6">
               <div className="text-center">
                 <p className="text-3xl font-semibold">{examResults.correct_count}/{examResults.total}</p>
-                <p className="text-xs text-slate-muted">Correct</p>
+                <p className="text-xs text-slate-muted">{t("correct")}</p>
               </div>
               <div className="text-center">
                 <p className="text-3xl font-semibold">{Math.round(examResults.accuracy * 100)}%</p>
-                <p className="text-xs text-slate-muted">Accuracy</p>
+                <p className="text-xs text-slate-muted">{t("accuracy")}</p>
               </div>
               {startedAt && (
                 <div className="text-center">
                   <p className="text-3xl font-semibold">{formatTime(elapsed)}</p>
-                  <p className="text-xs text-slate-muted">Time spent</p>
+                  <p className="text-xs text-slate-muted">{t("timeSpent")}</p>
                 </div>
               )}
             </div>
@@ -634,7 +646,7 @@ export function MockExam() {
                           {/* Structured feedback */}
                           {!result.correct && result.missing_steps?.length > 0 && (
                             <div className="mt-1 text-xs">
-                              <span className="text-slate-muted">Missing steps:</span>
+                              <span className="text-slate-muted">{t("missingSteps")}:</span>
                               <ul className="ml-3 list-disc">
                                 {result.missing_steps.map((step: string, i: number) => (
                                   <li key={i}>{step}</li>
@@ -644,7 +656,7 @@ export function MockExam() {
                           )}
                           {!result.correct && result.wrong_concepts?.length > 0 && (
                             <div className="mt-1 text-xs">
-                              <span className="text-slate-muted">Watch out for:</span>
+                              <span className="text-slate-muted">{t("watchOutFor")}:</span>
                               <ul className="ml-3 list-disc">
                                 {result.wrong_concepts.map((c: string, i: number) => (
                                   <li key={i}>{c}</li>
@@ -656,7 +668,7 @@ export function MockExam() {
                             <p className="mt-1 text-xs italic text-slate-muted">{result.suggestion}</p>
                           )}
                           {!result.correct && result.correct_answer && (
-                            <p className="mt-1 text-xs"><span className="text-slate-muted">Expected:</span> {result.correct_answer}</p>
+                            <p className="mt-1 text-xs"><span className="text-slate-muted">{t("expectedAnswer")}:</span> {result.correct_answer}</p>
                           )}
                         </div>
                       </div>
@@ -737,7 +749,7 @@ export function MockExam() {
             )}
             {current.difficulty && (
               <span className="rounded bg-ivory-deep px-2 py-0.5 text-xs text-slate-muted">
-                {label(current.difficulty, DIFF_LABELS)}
+                {t(DIFF_LABELS[current.difficulty])}
               </span>
             )}
           </div>
@@ -773,15 +785,15 @@ export function MockExam() {
 
           <div className="mt-6 flex items-center justify-between">
             <Button variant="ghost" size="sm" disabled={currentIndex === 0} onClick={() => setCurrentIndex((value) => Math.max(0, value - 1))}>
-              <ChevronLeft size={16} /> Previous
+              <ChevronLeft size={16} /> {t("previous")}
             </Button>
             {currentIndex === total - 1 ? (
               <Button variant="coral" size="sm" onClick={handleSubmit} disabled={submitting}>
-                {submitting ? <Loader2 size={16} className="animate-spin" /> : "Submit exam"}
+                {submitting ? <Loader2 size={16} className="animate-spin" /> : t("submit")}
               </Button>
             ) : (
               <Button variant="outline" size="sm" onClick={() => setCurrentIndex((value) => Math.min(total - 1, value + 1))}>
-                Next <ChevronRight size={16} />
+                {t("next")} <ChevronRight size={16} />
               </Button>
             )}
           </div>

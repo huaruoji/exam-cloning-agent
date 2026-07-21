@@ -4,6 +4,16 @@ const API_KEY_STORAGE = "exam-cloner:user-api-key"
 const USER_ID_STORAGE = "exam-cloner:user-id"
 const MODEL_CONFIG_STORAGE = "exam-cloner:model-config"
 
+export function safeGetItem(key: string): string | null {
+  try { return localStorage.getItem(key) } catch { return null }
+}
+export function safeSetItem(key: string, value: string): void {
+  try { localStorage.setItem(key, value) } catch { /* ignore */ }
+}
+export function safeRemoveItem(key: string): void {
+  try { localStorage.removeItem(key) } catch { /* ignore */ }
+}
+
 export interface ModelConfig {
   label: string
   baseUrl: string
@@ -15,20 +25,20 @@ export interface ModelConfig {
 export const defaultModelConfig: ModelConfig = { label: "Custom model", baseUrl: "", model: "", apiKey: "", allowFallback: true }
 
 export function getModelConfig(): ModelConfig {
-  try { return { ...defaultModelConfig, ...JSON.parse(localStorage.getItem(MODEL_CONFIG_STORAGE) || "{}") } }
+  try { return { ...defaultModelConfig, ...JSON.parse(safeGetItem(MODEL_CONFIG_STORAGE) || "{}") } }
   catch { return defaultModelConfig }
 }
 
 export function setModelConfig(config: ModelConfig) {
-  localStorage.setItem(MODEL_CONFIG_STORAGE, JSON.stringify(config))
+  safeSetItem(MODEL_CONFIG_STORAGE, JSON.stringify(config))
   setUserApiKey(config.apiKey)
 }
 
 function getUserId(): string {
-  let uid = localStorage.getItem(USER_ID_STORAGE)
+  let uid = safeGetItem(USER_ID_STORAGE)
   if (!uid) {
     uid = crypto.randomUUID()
-    localStorage.setItem(USER_ID_STORAGE, uid)
+    safeSetItem(USER_ID_STORAGE, uid)
   }
   return uid
 }
@@ -39,17 +49,17 @@ export function getUserIdDisplay(): string {
 
 export function regenerateUserId(): string {
   const uid = crypto.randomUUID()
-  localStorage.setItem(USER_ID_STORAGE, uid)
+  safeSetItem(USER_ID_STORAGE, uid)
   return uid
 }
 
 export function getUserApiKey(): string {
-  return localStorage.getItem(API_KEY_STORAGE) || ""
+  return safeGetItem(API_KEY_STORAGE) || ""
 }
 
 export function setUserApiKey(key: string) {
-  if (key) localStorage.setItem(API_KEY_STORAGE, key)
-  else localStorage.removeItem(API_KEY_STORAGE)
+  if (key) safeSetItem(API_KEY_STORAGE, key)
+  else safeRemoveItem(API_KEY_STORAGE)
 }
 
 export interface Course {
@@ -270,10 +280,11 @@ export const api = {
     timeLimitMinutes?: number
     bankRatio?: number
     onProgress?: (done: number, total: number) => void
-  }): Promise<{ id: string; title: string; questions: Question[]; style_profile: any; time_limit_minutes: number | null }> => {
+  }, signal?: AbortSignal): Promise<{ id: string; title: string; questions: Question[]; style_profile: any; time_limit_minutes: number | null }> => {
     const res = await fetch(`${BASE_URL}/exam/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...modelHeaders() },
+      signal,
       body: JSON.stringify({
         course_id: payload.courseId,
         num_questions: payload.numQuestions,
@@ -294,7 +305,9 @@ export const api = {
     const decoder = new TextDecoder()
     let buffer = ""
     let exam: any = null
+    let aborted = false
     while (true) {
+      if (signal?.aborted) { aborted = true; break }
       const { done, value } = await reader.read()
       if (done) break
       buffer += decoder.decode(value, { stream: true })
@@ -312,6 +325,8 @@ export const api = {
         } catch { /* ignore parse errors on partial lines */ }
       }
     }
+    reader.cancel()
+    if (aborted) throw new DOMException("Aborted", "AbortError")
     if (!exam) throw new Error("Generation produced no result")
     return exam
   },

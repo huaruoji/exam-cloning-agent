@@ -37,12 +37,18 @@ export function Dashboard() {
   const [computeHealthy, setComputeHealthy] = useState<boolean | null>(null)
 
   useEffect(() => {
+    let cancelled = false
     if (!selectedCourse) {
       setStats(null)
       return
     }
-    api.getStats(selectedCourse.id).then(setStats).catch(() => setStats(null))
-    api.getComputeStatus().then((value) => setComputeHealthy(value.status === "healthy" || value.providers?.some((provider: any) => provider.healthy || provider.usable))).catch(() => setComputeHealthy(false))
+    api.getStats(selectedCourse.id)
+      .then((value) => { if (!cancelled) setStats(value) })
+      .catch(() => { if (!cancelled) setStats(null) })
+    api.getComputeStatus()
+      .then((value) => { if (!cancelled) setComputeHealthy(value.status === "healthy" || value.providers?.some((provider: any) => provider.healthy || provider.usable)) })
+      .catch(() => { if (!cancelled) setComputeHealthy(false) })
+    return () => { cancelled = true }
   }, [selectedCourse])
 
   const seedDemo = async () => {

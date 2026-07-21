@@ -45,7 +45,18 @@ export function QuestionBank() {
       .catch((e) => { setQuestions([]); addToast(e.message || "Failed to load questions", "error") })
   }, [selectedCourse, topic, difficulty, sourceType, addToast])
 
-  useEffect(() => { loadQuestions() }, [loadQuestions])
+  useEffect(() => {
+    let cancelled = false
+    if (!selectedCourse) { setQuestions([]); return }
+    api.getQuestions({
+      course_id: selectedCourse.id,
+      ...(topic ? { topic } : {}),
+      ...(difficulty ? { difficulty } : {}),
+      ...(sourceType ? { source_type: sourceType } : {}),
+    }).then((res) => { if (!cancelled) { setQuestions(res.questions); setPage(0) } })
+      .catch((e) => { if (!cancelled) { setQuestions([]); addToast(e.message || "Failed to load questions", "error") } })
+    return () => { cancelled = true }
+  }, [selectedCourse, topic, difficulty, sourceType, addToast])
 
   const handleDelete = async (questionId: string) => {
     if (!confirm("Remove this question from the bank?")) return
@@ -160,17 +171,17 @@ export function QuestionBank() {
           {topics.map((item) => (<option key={item} value={item}>{item}</option>))}
         </select>
         <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="rounded-lg border border-border bg-ivory px-3 py-2 text-sm">
-          <option value="">All difficulties</option>
-          <option value="easy">Easy</option>
-          <option value="medium">Medium</option>
-          <option value="hard">Hard</option>
+          <option value="">{t("allDifficulties")}</option>
+          <option value="easy">{t("diffEasy")}</option>
+          <option value="medium">{t("diffMedium")}</option>
+          <option value="hard">{t("diffHard")}</option>
         </select>
         <select value={sourceType} onChange={(e) => setSourceType(e.target.value)} className="rounded-lg border border-border bg-ivory px-3 py-2 text-sm">
-          <option value="">All document types</option>
-          <option value="past_exam">Past exam</option>
-          <option value="homework">Homework</option>
-          <option value="slides">Slides</option>
-          <option value="reference_pdf">Reference PDF</option>
+          <option value="">{t("allDocTypes")}</option>
+          <option value="past_exam">{t("docPastExam")}</option>
+          <option value="homework">{t("docHomework")}</option>
+          <option value="slides">{t("docSlides")}</option>
+          <option value="reference_pdf">{t("docReferencePdf")}</option>
         </select>
       </div>
 
@@ -187,7 +198,7 @@ export function QuestionBank() {
                 <Card>
                   <CardContent className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">Edit question</p>
+                      <p className="text-sm font-medium">{t("edit")}</p>
                       <div className="flex gap-2">
                         <Button variant="coral" size="sm" onClick={() => saveEdit(q.id)}>
                           <Check size={14} /> Save
@@ -240,15 +251,15 @@ export function QuestionBank() {
                     <div className="flex gap-4">
                       <div className="flex-1">
                         <label className="mb-1 block text-xs uppercase tracking-[0.14em] text-slate-muted">Difficulty</label>
-                        <select
-                          value={editForm.difficulty}
-                          onChange={(e) => setEditForm({ ...editForm, difficulty: e.target.value })}
-                          className="w-full rounded-lg border border-border bg-ivory px-3 py-2 text-sm outline-none"
-                        >
-                          <option value="easy">Easy</option>
-                          <option value="medium">Medium</option>
-                          <option value="hard">Hard</option>
-                        </select>
+                          <select
+                            value={editForm.difficulty}
+                            onChange={(e) => setEditForm({ ...editForm, difficulty: e.target.value })}
+                            className="w-full rounded-lg border border-border bg-ivory px-3 py-2 text-sm outline-none"
+                          >
+                            <option value="easy">{t("diffEasy")}</option>
+                            <option value="medium">{t("diffMedium")}</option>
+                            <option value="hard">{t("diffHard")}</option>
+                          </select>
                       </div>
                       <div className="flex-1">
                         <label className="mb-1 block text-xs uppercase tracking-[0.14em] text-slate-muted">Topic</label>
@@ -287,7 +298,7 @@ export function QuestionBank() {
                   <button
                     onClick={(e) => { e.stopPropagation(); startEdit(q) }}
                     className="absolute right-11 top-4 rounded-lg p-1.5 text-slate-muted hover:bg-coral/10 hover:text-coral"
-                    title="Edit question"
+                    title={t("edit")}
                   >
                     <Pencil size={14} />
                   </button>
@@ -301,13 +312,13 @@ export function QuestionBank() {
       {totalPages > 1 && (
         <div className="mt-6 flex items-center justify-center gap-2">
           <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
-            className="rounded-lg border border-border bg-ivory px-3 py-1.5 text-sm disabled:opacity-50">Previous</button>
+            className="rounded-lg border border-border bg-ivory px-3 py-1.5 text-sm disabled:opacity-50">{t("previous")}</button>
           {Array.from({ length: totalPages }, (_, i) => (
             <button key={i} onClick={() => setPage(i)}
               className={cn("h-8 w-8 rounded-lg text-sm", page === i ? "border border-coral/40 bg-coral/10 text-coral" : "bg-ivory text-slate-muted hover:bg-ivory-warm")}>{i + 1}</button>
           ))}
           <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
-            className="rounded-lg border border-border bg-ivory px-3 py-1.5 text-sm disabled:opacity-50">Next</button>
+            className="rounded-lg border border-border bg-ivory px-3 py-1.5 text-sm disabled:opacity-50">{t("next")}</button>
         </div>
       )}
     </div>

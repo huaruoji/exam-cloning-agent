@@ -62,7 +62,7 @@ export function Practice() {
   // Auto-load a question when the course or AI toggle changes.
   useEffect(() => {
     if (selectedCourse) loadNext()
-  }, [selectedCourse])
+  }, [selectedCourse, allowAi])
 
   useEffect(() => () => { if (slowTimer.current) window.clearTimeout(slowTimer.current) }, [])
 
@@ -133,7 +133,7 @@ export function Practice() {
                 ? "No questions available for this course."
                 : "No bank questions match. Enable AI-generated questions or upload more materials."}
             </p>
-            <Button variant="outline" className="mt-4" onClick={() => loadNext()}>Try again</Button>
+            <Button variant="outline" className="mt-4" onClick={() => loadNext()}>{t("tryAgain")}</Button>
           </CardContent>
         </Card>
       )}
@@ -209,13 +209,13 @@ export function Practice() {
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="coral" onClick={() => submitAction("submit")}
                   disabled={submitting || (!selectedOption && !answer.trim())}>
-                  {submitting ? <Loader2 size={16} className="animate-spin" /> : "Submit"}
+                  {submitting ? <Loader2 size={16} className="animate-spin" /> : t("submit")}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => submitAction("reveal")} disabled={submitting}>
-                  <Eye size={14} /> Show answer
+                  <Eye size={14} /> {t("showAnswer")}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => submitAction("next")} disabled={submitting}>
-                  <SkipForward size={14} /> Next
+                  <SkipForward size={14} /> {t("next")}
                 </Button>
               </div>
             )}
@@ -240,13 +240,13 @@ export function Practice() {
                     <XCircle size={18} className="text-danger" />
                   )}
                   <span className="text-sm font-medium">
-                    {result?.grading_failed ? "Grading unavailable" : revealed ? "Answer" : result?.correct ? "Correct" : "Needs review"}
+                    {result?.grading_failed ? t("gradingUnavailable") : revealed ? t("answer") : result?.correct ? t("correct") : t("needsReview")}
                   </span>
                 </div>
 
                 {result?.feedback && (
                   <div className="mb-3 rounded-lg bg-ivory px-3 py-2 text-sm">
-                    <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">Feedback</p>
+                    <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">{t("feedback")}</p>
                     <p>{result.feedback}</p>
                   </div>
                 )}
@@ -254,7 +254,7 @@ export function Practice() {
                 {/* Structured feedback */}
                 {result && !result.correct && result.missing_steps?.length > 0 && (
                   <div className="mb-3 rounded-lg bg-ivory px-3 py-2 text-sm">
-                    <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">Missing steps</p>
+                    <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">{t("missingSteps")}</p>
                     <ul className="list-inside list-disc space-y-0.5">
                       {result.missing_steps.map((step: string, i: number) => (
                         <li key={i} className="text-sm">{step}</li>
@@ -264,7 +264,7 @@ export function Practice() {
                 )}
                 {result && !result.correct && result.wrong_concepts?.length > 0 && (
                   <div className="mb-3 rounded-lg bg-ivory px-3 py-2 text-sm">
-                    <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">Watch out for</p>
+                    <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">{t("watchOutFor")}</p>
                     <ul className="list-inside list-disc space-y-0.5">
                       {result.wrong_concepts.map((concept: string, i: number) => (
                         <li key={i} className="text-sm">{concept}</li>
@@ -274,7 +274,7 @@ export function Practice() {
                 )}
                 {result && !result.correct && result.suggestion && (
                   <div className="mb-3 rounded-lg bg-ivory px-3 py-2 text-sm">
-                    <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">Suggestion</p>
+                    <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">{t("suggestion")}</p>
                     <p className="italic">{result.suggestion}</p>
                   </div>
                 )}
@@ -282,14 +282,14 @@ export function Practice() {
                 {question.answer && (revealed || (!result?.correct && result?.correct_answer)) && (
                   <div className="mb-3 text-sm">
                     <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">
-                      {revealed ? "Answer" : "Expected answer"}
+                      {revealed ? t("answer") : t("expectedAnswer")}
                     </p>
                     <MathRenderer content={question.answer} />
                   </div>
                 )}
                 {question.explanation && (revealed || result) && (
                   <div className="text-sm">
-                    <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">Explanation</p>
+                    <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">{t("explanation")}</p>
                     <MathRenderer content={question.explanation} />
                   </div>
                 )}
@@ -305,16 +305,16 @@ export function Practice() {
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 {result?.grading_failed && (
                   <Button variant="outline" onClick={() => submitAction("submit")} disabled={submitting}>
-                    <RefreshCw size={14} /> Retry grading
+                    <RefreshCw size={14} /> {t("tryAgain")}
                   </Button>
                 )}
                 {result && !result.correct && question.topic && (
                   <Button variant="outline" onClick={() => loadNext(question.topic)}>
-                    <RefreshCw size={14} /> Practice another "{question.topic}" question
+                    <RefreshCw size={14} /> {t("practiceAnother", { topic: question.topic })}
                   </Button>
                 )}
                 <Button variant="outline" onClick={() => loadNext()}>
-                  Next question <ArrowRight size={16} />
+                  {t("next")} <ArrowRight size={16} />
                 </Button>
               </div>
             )}

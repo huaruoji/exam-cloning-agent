@@ -35,6 +35,7 @@ export function Review() {
   const [stats, setStats] = useState<any>(null)
 
   useEffect(() => {
+    let cancelled = false
     if (!selectedCourse) return
     Promise.all([
       api.getWrong(selectedCourse.id),
@@ -42,11 +43,14 @@ export function Review() {
       api.getReviewStats(selectedCourse.id),
     ])
       .then(([w, h, s]) => {
-        setWrong(w.wrong)
-        setHistory(h.history)
-        setStats(s)
+        if (!cancelled) {
+          setWrong(w.wrong)
+          setHistory(h.history)
+          setStats(s)
+        }
       })
-      .catch((e) => addToast(e.message || "Failed to load review data", "error"))
+      .catch((e) => { if (!cancelled) addToast(e.message || "Failed to load review data", "error") })
+    return () => { cancelled = true }
   }, [selectedCourse, addToast])
 
   const redoQuestion = (topic: string) => {
@@ -84,7 +88,7 @@ export function Review() {
               <div className="rounded-xl bg-coral/10 p-3 text-coral"><CheckCircle size={18} /></div>
               <div>
                 <p className="text-2xl font-semibold">{stats.total_correct}/{stats.total_submitted}</p>
-                <p className="text-xs text-slate-muted">Correct answers</p>
+                <p className="text-xs text-slate-muted">{t("correct")} answers</p>
               </div>
             </CardContent>
           </Card>
@@ -93,13 +97,13 @@ export function Review() {
               <div className="rounded-xl bg-danger/10 p-3 text-danger"><XCircle size={18} /></div>
               <div>
                 <p className="text-2xl font-semibold">{wrong.length}</p>
-                <p className="text-xs text-slate-muted">Wrong to review</p>
+                <p className="text-xs text-slate-muted">{t("wrong")} to review</p>
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent>
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-muted">Overall accuracy</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-muted">{t("accuracy")}</p>
               <p className="mt-1 text-2xl font-semibold">
                 {stats.total_submitted ? Math.round((stats.total_correct / stats.total_submitted) * 100) : 0}%
               </p>
@@ -196,7 +200,7 @@ export function Review() {
                         item.correct === true && "bg-success/10 text-success",
                         item.correct === false && "bg-danger/10 text-danger",
                       )}>
-                        {item.correct ? "correct" : "wrong"}
+                        {item.correct ? t("correct") : t("wrong")}
                       </span>
                       <span className="text-slate-muted">{item.concept}</span>
                       <span className="text-xs text-slate-muted">· Answer: {item.answer || "(empty)"}</span>

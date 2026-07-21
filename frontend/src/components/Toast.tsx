@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -6,6 +6,7 @@ interface Toast {
   id: string
   message: string
   type: "success" | "error" | "info"
+  timerId?: ReturnType<typeof setTimeout>
 }
 
 interface ToastContextValue {
@@ -24,17 +25,34 @@ export function useToast() {
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
+  const timerIdsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
 
   const addToast = useCallback((message: string, type: Toast["type"] = "info") => {
     const id = Math.random().toString(36).slice(2)
-    setToasts((prev) => [...prev, { id, message, type }])
-    setTimeout(() => {
+    const timerId = setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id))
+      timerIdsRef.current.delete(timerId)
     }, 5000)
+    timerIdsRef.current.add(timerId)
+    setToasts((prev) => [...prev, { id, message, type, timerId }])
   }, [])
 
   const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
+    setToasts((prev) => {
+      const toast = prev.find((t) => t.id === id)
+      if (toast?.timerId !== undefined) {
+        clearTimeout(toast.timerId)
+        timerIdsRef.current.delete(toast.timerId)
+      }
+      return prev.filter((t) => t.id !== id)
+    })
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      timerIdsRef.current.forEach((id) => clearTimeout(id))
+      timerIdsRef.current.clear()
+    }
   }, [])
 
   return (

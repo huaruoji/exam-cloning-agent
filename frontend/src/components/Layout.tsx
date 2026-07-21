@@ -73,7 +73,7 @@ export function Layout() {
 
   // Fetch per-course meta (question count + mastery) for the switcher.
   useEffect(() => {
-    const cancelled = false
+    let cancelled = false
     async function loadMeta() {
       const next: Record<string, CourseMeta> = {}
       await Promise.all(
@@ -97,6 +97,7 @@ export function Layout() {
       if (!cancelled) setMeta(next)
     }
     if (courses.length) loadMeta()
+    return () => { cancelled = true }
   }, [courses])
 
   useEffect(() => {
@@ -178,7 +179,7 @@ export function Layout() {
 
         {/* Sidebar — fixed on mobile (slides in), sticky on desktop */}
         <aside className={cn(
-          "fixed inset-y-0 left-0 z-50 flex h-full w-[280px] shrink-0 flex-col overflow-hidden rounded-r-2xl border-r border-border bg-ivory-deep p-5 transition-transform lg:static lg:z-auto lg:h-[calc(100vh-2.5rem)] lg:rounded-2xl lg:border lg:border-border lg:transition-none",
+          "fixed inset-y-0 left-0 z-50 flex h-full w-[280px] shrink-0 flex-col overflow-hidden rounded-r-2xl border-r border-border bg-ivory-deep p-5 transition-transform lg:sticky lg:top-5 lg:z-auto lg:h-[calc(100vh-2.5rem)] lg:rounded-2xl lg:border lg:border-border lg:transition-none",
           mobileNavOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}>
           <div className="mb-5">

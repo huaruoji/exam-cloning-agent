@@ -3,6 +3,7 @@ import { Check, Pencil, Trash2, X } from "lucide-react"
 
 import { MathRenderer } from "@/components/MathRenderer"
 import { cn } from "@/lib/utils"
+import { useLanguage } from "@/i18n"
 
 export interface QuestionData {
   id: string
@@ -50,6 +51,7 @@ export function QuestionCard({
   children,
   compact = false,
 }: QuestionCardProps) {
+  const { t } = useLanguage()
   const [expanded, setExpanded] = useState(defaultExpanded)
   const [editingTopic, setEditingTopic] = useState(false)
   const [topicDraft, setTopicDraft] = useState(question.topic || "")
@@ -157,7 +159,7 @@ export function QuestionCard({
             {/* Answer */}
             {question.answer && (
               <div className="rounded-lg bg-success/5 px-4 py-3">
-                <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">Answer</p>
+                <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">{t("answer")}</p>
                 <div className="text-sm"><MathRenderer content={question.answer} /></div>
               </div>
             )}
@@ -165,7 +167,7 @@ export function QuestionCard({
             {/* Explanation */}
             {question.explanation && (
               <div className="rounded-lg bg-ivory px-4 py-3 text-sm">
-                <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">Explanation</p>
+                <p className="mb-1 text-xs uppercase tracking-[0.14em] text-slate-muted">{t("explanation")}</p>
                 <MathRenderer content={question.explanation} />
               </div>
             )}
