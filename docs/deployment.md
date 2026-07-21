@@ -77,14 +77,10 @@ FRONTEND_DIST=../frontend/dist PORT=3000 nohup uv run python main.py > ~/exam-cl
 
 ### Data Persistence
 
-```bash
-# Set up persistent storage
-mkdir -p /mydata/exam-cloner-data/data
-mkdir -p /mydata/exam-cloner-data/uploads
-rm -rf backend/data backend/uploads
-ln -s /mydata/exam-cloner-data/data backend/data
-ln -s /mydata/exam-cloner-data/uploads backend/uploads
-```
+Configure `DATA_DIR=/mydata/exam-cloner-data/data` and
+`UPLOAD_DIR=/mydata/exam-cloner-data/uploads` in the environment. Create those
+directories on the platform before the first start. This avoids replacing an
+existing data directory during a routine deployment.
 
 ## API Authentication
 

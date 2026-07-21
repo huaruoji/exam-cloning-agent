@@ -97,7 +97,7 @@
 - [x] Upload polling error handling: consistent silent catch
 - [x] Deployment: fix platform prefix handling (SPA fallback, API path rewrite middleware, base URL)
 - [x] Deployment: mobile responsive layout
-- [x] Docs: fix SSE→NDJSON, redact internal info, add operations playbook
+- [x] Docs: document NDJSON, redact tracked deployment details, add repository-safe operations guide and ignored local credential guide
 
 ## Design Decisions
 

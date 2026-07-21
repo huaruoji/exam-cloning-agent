@@ -105,13 +105,13 @@ model and does not present the simulated primary as a real outage.
 ```json
 {
   "simulated": true,
-  "outcome": "passed",
-  "message": "Simulated failover selected a verified fallback",
+  "outcome": "degraded",
+  "message": "Simulated failover reached rules-only degraded mode",
   "steps": [
     {"provider":"Drill primary","result":"simulated_failure"},
-    {"provider":"Built-in DeepSeek","result":"selected_without_network_request"}
+    {"provider":"rules-only","result":"selected_without_network_request"}
   ],
-  "selected_provider": "Built-in DeepSeek"
+  "selected_provider": null
 }
 ```
 
