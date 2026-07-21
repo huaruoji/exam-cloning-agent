@@ -109,6 +109,8 @@ can configure trusted private or localhost services with
 `MODEL_LOCAL_ENDPOINTS`; local Ollama, LM Studio, and vLLM ports are also
 auto-discovered by default. See [docs/compute-api.md](docs/compute-api.md).
 
+For deployment and troubleshooting, see the [documentation map](docs/README.md).
+
 For a truthful local or SSH capability report (CPU/cgroup limits, visible GPUs,
 and known inference ports):
 
