@@ -40,7 +40,7 @@
 
 - [x] Product rename: Exam Cloning Agent → Exam Cloner
 - [x] User isolation: X-User-Id header, user_id on all records, filtering on read
-- [x] Error handling: HTTPException instead of `{"error": ...}`, SSE error before streaming
+- [x] Error handling: HTTPException instead of `{"error": ...}`, pre-stream NDJSON errors
 - [x] Grading response shape: structured {correct, feedback, missing_steps, wrong_concepts, suggestion}
 - [x] PATCH /api/questions/{question_id} — update selected fields
 - [x] POST /api/uploads/text — create document from raw text
@@ -101,7 +101,7 @@
 
 ## Design Decisions
 
-- **LLM**: DeepSeek API with `deepseek-v4-flash`
+- **LLM**: OpenAI-compatible provider routing with optional DeepSeek, user-selected public endpoints, and administrator-managed local services
 - **PDF Parser**: pdfplumber for text extraction + LLM for structure parsing
 - **Adaptive Algorithm**: SM-2 spaced repetition with persisted ease_factor, Beta prior, due-concept scheduling
 - **Grading**: All question types (MCQ, true/false, short answer, calculation, essay) graded by LLM with structured deep feedback (missing_steps, wrong_concepts, suggestion)

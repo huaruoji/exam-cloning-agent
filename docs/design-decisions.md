@@ -40,3 +40,24 @@
 - **Generation context**: when generating questions, up to 3 matching bank questions are included as few-shot examples in the prompt so the output mimics the course's real exam style.
 - **Duration**: elapsed time tracked via periodic PATCH calls during the session, recorded on submission.
 - **Wrong-answer import**: completed exam results can be one-click imported into practice history, making wrong exam questions reviewable and redoable in the adaptive practice flow.
+
+## 7. Model routing and resource awareness
+
+- **Chosen**: route objective grading to deterministic rules, reuse stored
+  question-bank items, then try a selected compatible model endpoint with
+  explicit fallback to trusted local or built-in providers.
+- **Why**: the competition environment has variable resource availability;
+  useful behavior must continue when no GPU or local model is available.
+- **Security**: browser-supplied endpoints are restricted to public HTTP(S)
+  destinations. Private and loopback services are administrator-managed by
+  environment configuration. API keys are request-scoped and excluded from
+  telemetry.
+- **Tradeoff**: the demo telemetry is process-local and resets on restart;
+  durable metrics require a later database/retention design.
+
+## 8. Interface language
+
+- **Chosen**: a small persistent Chinese/English catalog for navigation,
+  settings,算力中心, critical actions, empty states, and status messages.
+- **Tradeoff**: uploaded course/question content is not mechanically translated;
+  browser translation remains a practical option for long source material.

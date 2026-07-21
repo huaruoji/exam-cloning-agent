@@ -117,3 +117,9 @@ model and does not present the simulated primary as a real outage.
 
 Model completions use a three-consecutive-failure circuit breaker. The provider
 is skipped for 60 seconds, after which it is allowed a recovery attempt.
+
+## Related documents
+
+- [README](../README.md): user-facing setup and competition demo flow
+- [Operations](operations.md): repository-safe deployment and troubleshooting
+- [Competition design](superpowers/specs/2026-07-20-resource-aware-exam-cloner-design.md): scope, UX, and evidence model

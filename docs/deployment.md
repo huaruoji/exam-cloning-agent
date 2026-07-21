@@ -36,9 +36,9 @@ Persistent storage is mounted at `/mydata` (63 GB).
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source $HOME/.local/bin/env
 
-# Create .env with DeepSeek API key
+# Create .env with optional built-in provider settings
 cp .env.example .env
-# edit .env → set DEEPSEEK_API_KEY
+# edit .env → set DEEPSEEK_API_KEY or MODEL_LOCAL_ENDPOINTS if needed
 
 cd backend
 uv sync                     # Installs Python + deps
