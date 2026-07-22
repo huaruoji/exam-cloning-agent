@@ -1,0 +1,532 @@
+% !TEX program = xelatex
+% Exam Cloner — CCF Computility 2026 答辩 PPT
+% 风格：Anthropic/Claude 暖象牙色编辑风（纯 Beamer 手动实现，不依赖第三方主题）
+% 作者：王语诺 刘睿淇
+\documentclass[aspectratio=169,11pt]{beamer}
+
+% ===== 中文支持 =====
+\usepackage[UTF8]{ctex}
+\usepackage{fontspec}
+
+% ===== 字体（Anthropic 风格：Serif 标题 + Sans 正文）=====
+% 尝试 Georgia 风格 serif，回退到系统 serif
+\IfFontExistsTF{Georgia}{\setmainfont{Georgia}}{}
+\IfFontExistsTF{Noto Sans CJK SC}{\setsansfont{Noto Sans CJK SC}}{}
+\IfFontExistsTF{Noto Serif CJK SC}{}{}
+
+% ===== Anthropic/Claude 配色盘（取自项目 index.css + 官方交叉验证）=====
+\usepackage{xcolor}
+\definecolor{ivory}{HTML}{FAF9F6}        % 画布底色
+\definecolor{ivoryCard}{HTML}{FFFFFF}     % 卡片底色
+\definecolor{ivoryWarm}{HTML}{F5F0E8}     % 暖卡片
+\definecolor{ivoryDeep}{HTML}{EFE9DE}     % 深卡片
+\definecolor{ink}{HTML}{141413}           % 主文字（暖黑）
+\definecolor{inkDark}{HTML}{181715}       % 深文字
+\definecolor{slateMuted}{HTML}{6B7280}    % 次要文字
+\definecolor{slateLight}{HTML}{9CA3AF}    % 三级文字
+\definecolor{coral}{HTML}{CC785C}         % 重音（项目 coral）
+\definecolor{coralHover}{HTML}{B8654A}    % 深重音
+\definecolor{success}{HTML}{16A34A}       % 成功
+\definecolor{warning}{HTML}{D97706}       % 警告
+\definecolor{danger}{HTML}{DC2626}        % 危险
+\definecolor{border}{HTML}{E5E5E0}        % 边框
+\definecolor{borderSubtle}{HTML}{F0EDE6}  % 细边框
+
+% ===== Beamer 主题清理（极简扁平）=====
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{}
+\setbeamertemplate{headline}{}
+
+% 配色应用
+\setbeamercolor{background canvas}{bg=ivory}
+\setbeamercolor{normal text}{fg=ink, bg=ivory}
+\setbeamercolor{frametitle}{fg=ink, bg=ivory}
+\setbeamercolor{title}{fg=ink}
+\setbeamercolor{subtitle}{fg=slateMuted}
+\setbeamercolor{author}{fg=slateMuted}
+\setbeamercolor{date}{fg=slateMuted}
+\setbeamercolor{institute}{fg=slateMuted}
+\setbeamercolor{itemize item}{fg=coral}
+\setbeamercolor{itemize subitem}{fg=coral}
+\setbeamercolor{enumerate item}{fg=coral}
+\setbeamercolor{alerted text}{fg=coral}
+\setbeamercolor{block title}{fg=ink, bg=ivoryWarm}
+\setbeamercolor{block body}{fg=ink, bg=ivoryWarm!50}
+\setbeamercolor{section in toc}{fg=ink}
+\setbeamercolor{subsection in toc}{fg=slateMuted}
+
+% 字体大小
+\setbeamerfont{frametitle}{size=\Large, series=\bfseries}
+\setbeamerfont{title}{size=\huge, series=\bfseries}
+\setbeamerfont{subtitle}{size=\large}
+\setbeamerfont{block title}{size=\normalsize, series=\bfseries}
+
+% itemize 符号（扁平圆点）
+\setbeamertemplate{itemize item}{\textcolor{coral}{\textbullet}}
+\setbeamertemplate{itemize subitem}{\textcolor{coral}{\small\textbullet}}
+
+% ===== 页面边距 =====
+\setbeamersize{text margin left=14mm, text margin right=14mm}
+
+% ===== 自定义帧标题（带 coral 下划线）=====
+\setbeamertemplate{frametitle}{%
+  \vspace{6mm}%
+  \begin{minipage}{\dimexpr\paperwidth-28mm\relax}
+    {\usebeamerfont{frametitle}\usebeamercolor[fg]{frametitle}\insertframetitle}\par
+    \vspace{1mm}
+    {\color{coral}\rule{18mm}{1.2pt}}%
+  \end{minipage}%
+  \vspace{2mm}%
+}
+
+% ===== 自定义页脚（极简：页码右下）=====
+\setbeamertemplate{footline}{%
+  \hfill\textcolor{slateLight}{\scriptsize\insertframenumber\,/\,\inserttotalframenumber}\hspace{6mm}\vspace{3mm}%
+}
+
+% ===== TikZ =====
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta, calc, fit, shapes.geometric, backgrounds, shadows.blur}
+
+% ===== tcolorbox（卡片）=====
+\usepackage[most]{tcolorbox}
+\tcbset{
+  claudecard/.style={
+    enhanced, colback=ivoryCard, colframe=border, boxrule=0.4pt,
+    arc=2mm, left=4mm, right=4mm, top=3mm, bottom=3mm,
+    fonttitle=\bfseries\color{ink}, coltitle=ink,
+    colbacktitle=ivoryWarm, titlerule=0pt,
+    attach boxed title to top left={xshift=4mm, yshift=-2mm},
+    boxed title style={colback=ivoryWarm, colframe=border, arc=1mm, boxrule=0.4pt},
+  },
+  claudebox/.style={
+    enhanced, colback=ivoryWarm, colframe=borderSubtle, boxrule=0.4pt,
+    arc=2mm, left=4mm, right=4mm, top=2.5mm, bottom=2.5mm,
+  },
+  coralbox/.style={
+    enhanced, colback=coral!8, colframe=coral, boxrule=0.6pt,
+    arc=2mm, left=4mm, right=4mm, top=2.5mm, bottom=2.5mm,
+    fonttitle=\bfseries\color{coralHover}, coltitle=coralHover,
+  },
+}
+
+% ===== 元信息 =====
+\title{Exam Cloner}
+\subtitle{资源感知的 AI 考试备考系统}
+\author{王语诺 \quad 刘睿淇}
+\institute{香港科技大学（广州）}
+\date{2026年7月24日 \quad CCF Computility 2026}
+
+\begin{document}
+
+% ============================================================
+% 标题页
+% ============================================================
+\begin{frame}[plain]
+  \begin{tikzpicture}[remember picture, overlay]
+    % 左侧 coral 装饰条
+    \fill[coral] (current page.north west) rectangle ([xshift=6mm]current page.south west);
+  \end{tikzpicture}
+  \vspace{18mm}
+  \begin{flushleft}\hspace{8mm}
+    {\Huge\bfseries\color{ink} Exam Cloner}\\[3mm]
+    {\Large\color{slateMuted} 资源感知的 AI 考试备考系统}\\[14mm]
+    {\large\color{ink} 王语诺 \quad 刘睿淇}\\[2mm]
+    {\normalsize\color{slateMuted} 香港科技大学（广州）}\\[10mm]
+    {\small\color{slateLight} 2026年7月24日 \quad·\quad CCF Computility 2026}\\
+    {\small\color{slateLight} 第三届 CCF 算力网系统与应用大赛}
+  \end{flushleft}
+\end{frame}
+
+% ============================================================
+% 目录
+% ============================================================
+\begin{frame}{目录}
+  \vspace{4mm}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{enumerate}
+      \item 问题与动机
+      \item 解决方案概览
+      \item 系统架构
+      \item 核心技术创新
+    \end{enumerate}
+    \column{0.5\textwidth}
+    \begin{enumerate}\setcounter{enumi}{4}
+      \item 算力感知与资源调度
+      \item 演示与部署
+      \item 工程质量与测试
+      \item 总结与展望
+    \end{enumerate}
+  \end{columns}
+\end{frame}
+
+% ============================================================
+\section{问题与动机}
+% ============================================================
+
+\begin{frame}{痛点：考试备考的三重困境}
+  \vspace{2mm}
+  \begin{columns}[T]
+    \column{0.32\textwidth}
+    \begin{tcolorbox}[claudecard, title=材料多，题目散]
+      \small 课程 PDF 累积成堆，知识点分散在历年试卷、作业、课件中，手动整理耗时且易遗漏。
+    \end{tcolorbox}
+    \column{0.32\textwidth}
+    \begin{tcolorbox}[claudecard, title=题海低效，缺乏反馈]
+      \small 刷题缺乏个性化，薄弱点无法精准定位；主观题无人批改，错题反复犯。
+    \end{tcolorbox}
+    \column{0.32\textwidth}
+    \begin{tcolorbox}[coralbox, title=算力资源不稳定]
+      \small 大模型服务可能不可用、限流或延迟波动；单一依赖导致学习中断，体验割裂。
+    \end{tcolorbox}
+  \end{columns}
+  \vspace{6mm}
+  \begin{center}
+    \color{ink}\textbf{核心挑战：}在\textcolor{coral}{算力资源波动}的环境下，如何提供\textcolor{coral}{稳定、个性化、有深度反馈}的备考体验？
+  \end{center}
+\end{frame}
+
+% ============================================================
+\section{解决方案概览}
+% ============================================================
+
+\begin{frame}{Exam Cloner：资源感知的 AI 备考系统}
+  \vspace{1mm}
+  \begin{center}
+    \begin{tcolorbox}[claudebox, width=0.92\textwidth]
+      \centering\scriptsize
+      上传课程材料 \;\textcolor{coral}{$\rightarrow$}\; AI 解析建题库 \;\textcolor{coral}{$\rightarrow$}\; 克隆考试风格生成模拟卷 \\
+      \;\textcolor{coral}{$\rightarrow$}\; 自适应练习 + LLM 深度批改 \;\textcolor{coral}{$\rightarrow$}\; 错题回流复习
+    \end{tcolorbox}
+  \end{center}
+  \vspace{2mm}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \textbf{\color{ink}四大功能支柱}
+    \begin{itemize}\scriptsize\setlength\itemsep{0.5mm}
+      \item \textbf{考试风格克隆}：从试卷/作业提取风格画像
+      \item \textbf{自适应练习}：SM-2 间隔重复 + 薄弱点调度
+      \item \textbf{全题型 LLM 批改}：含结构化深度反馈
+      \item \textbf{模拟考试}：可配题型/难度分布，自动保存
+    \end{itemize}
+    \column{0.48\textwidth}
+    \textbf{\color{ink}资源感知差异化}
+    \begin{itemize}\scriptsize\setlength\itemsep{0.5mm}
+      \item \textbf{多模型路由}：DeepSeek / Ollama / vLLM / 本地
+      \item \textbf{降级容错}：规则批改 + 题库复用兜底
+      \item \textbf{熔断器}：3 次失败自动隔离 60 秒
+      \item \textbf{算力中心}：实时遥测路由证据可见
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+% ============================================================
+\section{系统架构}
+% ============================================================
+
+\begin{frame}{系统架构总览}
+  \vspace{2mm}
+  \begin{center}
+  \begin{tikzpicture}[
+    node distance=3mm and 5mm,
+    box/.style={draw=border, fill=ivoryCard, rounded corners=1.5mm, minimum height=8mm, minimum width=24mm, font=\scriptsize, align=center, inner sep=2pt},
+    warmbox/.style={draw=border, fill=ivoryWarm, rounded corners=1.5mm, minimum height=8mm, minimum width=24mm, font=\scriptsize, align=center, inner sep=2pt},
+    coralbox/.style={draw=coral, fill=coral!10, rounded corners=1.5mm, minimum height=8mm, minimum width=24mm, font=\scriptsize, align=center, inner sep=2pt, text=ink},
+    arr/.style={-Stealth, thick, draw=slateMuted},
+  ]
+    \node[box] (fe) {React+Vite\\Tailwind v4};
+    \node[box, right=8mm of fe] (be) {FastAPI+uv\\:3000};
+    \node[coralbox, right=8mm of be] (router) {资源感知\\LLM 路由器};
+    \node[warmbox, above right=1mm and 8mm of router] (p1) {DeepSeek\\(内置)};
+    \node[warmbox, right=8mm of router] (p2) {用户自定义\\OpenAI 兼容};
+    \node[warmbox, below right=1mm and 8mm of router] (p3) {本地 Ollama\\vLLM/LM Studio};
+    \node[box, below=7mm of router] (rule) {规则批改+题库复用};
+
+    \draw[arr] (fe) -- node[above, font=\tiny\color{slateMuted}]{API} (be);
+    \draw[arr] (be) -- node[above, font=\tiny\color{slateMuted}]{生成/批改} (router);
+    \draw[arr] (router) -- (p1);
+    \draw[arr] (router) -- (p2);
+    \draw[arr] (router) -- (p3);
+    \draw[arr, dashed] (router) -- node[right, font=\tiny\color{slateMuted}]{降级} (rule);
+
+    \node[above=0.5mm of fe, font=\tiny\color{slateMuted}]{前端};
+    \node[above=0.5mm of be, font=\tiny\color{slateMuted}]{后端};
+    \node[above=0.5mm of router, font=\tiny\color{coral}]{核心};
+  \end{tikzpicture}
+  \end{center}
+  \vspace{2mm}
+  \begin{center}\small\color{slateMuted}
+  单进程部署 · JSON 原子存储 · 浏览器侧密钥 · SSRF 防护 · 中英文双语
+  \end{center}
+\end{frame}
+
+% ============================================================
+\section{核心技术创新}
+% ============================================================
+
+\begin{frame}{创新一：资源感知 LLM 路由}
+  \vspace{1mm}
+  \begin{tcolorbox}[coralbox, title=六级路由优先级（算力网核心）]
+    \scriptsize
+    \begin{enumerate}\setlength\itemsep{0.2mm}
+      \item \textbf{规则批改}：MCQ / 判断题本地确定性判定（零算力）
+      \item \textbf{题库复用}：命中已存题目直接返回（零算力）
+      \item \textbf{用户选定 provider}：用户配置的健康端点优先
+      \item \textbf{管理员本地 provider}：Ollama / vLLM 等内网服务
+      \item \textbf{内置 provider}：DeepSeek 兜底（允许 fallback 时）
+      \item \textbf{显式降级}：无可用 provider 时返回未批改，不误判
+    \end{enumerate}
+  \end{tcolorbox}
+  \vspace{2mm}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \textbf{\color{ink}容错机制}
+    \begin{itemize}\scriptsize\setlength\itemsep{0.2mm}
+      \item 每-provider 并发上限 + 超时
+      \item 3 次连续失败 → 熔断 60 秒
+      \item 探测成功 → 闭合熔断器
+      \item 重试有界，避免重复计费
+    \end{itemize}
+    \column{0.48\textwidth}
+    \textbf{\color{ink}安全与隐私}
+    \begin{itemize}\scriptsize\setlength\itemsep{0.2mm}
+      \item 用户密钥仅存浏览器，请求级附带
+      \item 用户 URL 禁止内网/回环（防 SSRF）
+      \item 管理员本地端点经环境变量配置
+      \item 遥测不记录密钥与完整 prompt
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{创新二：SM-2 自适应学习引擎}
+  \vspace{1mm}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{tcolorbox}[claudecard, title=算法核心]
+      \scriptsize
+      \textbf{SM-2 间隔重复}：基于连续答对次数与难度，动态调度复习间隔。\\[0.5mm]
+      \textbf{持久化 ease\_factor}：每个知识点维护独立难度系数。\\[0.5mm]
+      \textbf{Beta 先验}：冷启动用 Beta 分布平滑初始评分。\\[0.5mm]
+      \textbf{due-concept 调度}：优先推送到期薄弱知识点。
+    \end{tcolorbox}
+    \column{0.46\textwidth}
+    \begin{tcolorbox}[claudecard, title=数据流]
+      \scriptsize
+      \begin{enumerate}\setlength\itemsep{0.2mm}
+        \item 答题 → LLM 批改 → 更新掌握度
+        \item 误答 → 加入错题本
+        \item 错题 → 间隔重复调度
+        \item 模拟考错题 → 一键导入练习
+      \end{enumerate}
+    \end{tcolorbox}
+  \end{columns}
+  \vspace{2mm}
+  \begin{center}
+  \begin{tcolorbox}[claudebox, width=0.86\textwidth]
+    \centering\scriptsize\color{ink}
+    \textbf{效果}：客观题零算力即时反馈 \;·\; 主观题 LLM 深度批改 \;·\; 薄弱点自动浮现 \;·\; 复习间隔科学化
+  \end{tcolorbox}
+  \end{center}
+\end{frame}
+
+\begin{frame}{创新三：考试风格克隆与全题型批改}
+  \vspace{1mm}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \textbf{\color{ink}考试风格克隆}
+    \begin{tcolorbox}[claudebox]
+      \scriptsize
+      \begin{itemize}\setlength\itemsep{0.2mm}
+        \item pdfplumber 提取 + LLM 结构化解析
+        \item 从试卷/作业聚合风格画像
+        \item 生成时 few-shot 注入 3 道参考题
+        \item 题型/难度分布可调（滑块）
+        \item 题库/AI 生成比默认 80/20
+      \end{itemize}
+    \end{tcolorbox}
+    \column{0.48\textwidth}
+    \textbf{\color{ink}全题型 LLM 批改}
+    \begin{tcolorbox}[claudebox]
+      \scriptsize
+      支持五种题型：
+      \begin{itemize}\setlength\itemsep{0.2mm}
+        \item 选择题 / 判断题（规则批改）
+        \item 简答题 / 计算题 / 论述题（LLM）
+      \end{itemize}
+      结构化反馈：
+      \begin{itemize}\setlength\itemsep{0.2mm}
+        \item \textcolor{coral}{correct} 是否正确
+        \item \textcolor{coral}{missing\_steps} 缺失步骤
+        \item \textcolor{coral}{wrong\_concepts} 错误概念
+        \item \textcolor{coral}{suggestion} 改进建议
+      \end{itemize}
+    \end{tcolorbox}
+  \end{columns}
+\end{frame}
+
+% ============================================================
+\section{算力感知与资源调度}
+% ============================================================
+
+\begin{frame}{算力中心：路由证据可视化}
+  \vspace{1mm}
+  \begin{tcolorbox}[coralbox, title=为什么需要算力中心？]
+    \scriptsize 算力网应用的核心是\textbf{异构资源协同}。我们让每一次模型调用的路由决策、延迟、成败\textbf{对用户可见}，而非黑盒。
+  \end{tcolorbox}
+  \vspace{2mm}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \textbf{\color{ink}实时遥测}
+    \begin{itemize}\scriptsize\setlength\itemsep{0.2mm}
+      \item 当前路由模式（hybrid / degraded）
+      \item 各 provider 健康、延迟、熔断状态
+      \item 请求成功率、缓存/规则节省次数
+      \item 最近 20 条路由轨迹（含 fallback）
+    \end{itemize}
+    \column{0.48\textwidth}
+    \textbf{\color{ink}用户可操作}
+    \begin{itemize}\scriptsize\setlength\itemsep{0.2mm}
+      \item 添加/测试/移除公开兼容端点
+      \item 重新探测所有 provider
+      \item \textbf{故障切换演练}：零成本模拟失败
+      \item GPU 状态如实显示"硬件验收待定"
+    \end{itemize}
+  \end{columns}
+  \vspace{2mm}
+  \begin{center}\scriptsize\color{slateMuted}
+  遥测有界（500 条环形缓冲）· 重启重置 · 不记录密钥与 prompt
+  \end{center}
+\end{frame}
+
+% ============================================================
+\section{演示与部署}
+% ============================================================
+
+\begin{frame}{部署与演示}
+  \vspace{1mm}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \textbf{\color{ink}部署环境}
+    \begin{tcolorbox}[claudebox]
+      \scriptsize
+      \begin{itemize}\setlength\itemsep{0.3mm}
+        \item 平台：HKUST(GZ) Campus AI (GPUnion)
+        \item 单进程 FastAPI 监听 :3000
+        \item base path \texttt{/apps/exam-clone/}
+        \item 持久数据：\texttt{/mydata/exam-cloner-data/}
+        \item 容器无 GPU，约 2 核 4GiB
+      \end{itemize}
+    \end{tcolorbox}
+    \vspace{1mm}
+    \textbf{\color{ink}访问地址}
+    \begin{tcolorbox}[coralbox]
+      \centering\scriptsize
+      \texttt{gpunion.hkust-gz.edu.cn/apps/exam-clone/}\\[1mm]
+      \color{ink}\normalfont 现场可演示
+    \end{tcolorbox}
+    \column{0.46\textwidth}
+    \textbf{\color{ink}演示流程（7 步）}
+    \begin{enumerate}\scriptsize\setlength\itemsep{0.3mm}
+      \item 切换中英文，载入演示课程
+      \item 打开算力中心，查看 provider 状态
+      \item 测试用户自定义端点
+      \item 答客观题，查看模型调用记录
+      \item 批改主观题，展示 provider 与延迟
+      \item 运行故障切换演练
+      \item 回 Dashboard，查看薄弱点与节省
+    \end{enumerate}
+  \end{columns}
+\end{frame}
+
+% ============================================================
+\section{工程质量与测试}
+% ============================================================
+
+\begin{frame}{工程质量与安全}
+  \vspace{1mm}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \textbf{\color{ink}代码规模}
+    \begin{itemize}\scriptsize\setlength\itemsep{0.2mm}
+      \item 后端 \textbf{3,082 行} Python（13 路由 + 9 服务）
+      \item 前端 \textbf{3,711 行} TypeScript（8 页面 + 组件）
+      \item 测试 \textbf{830 行}（引擎/API/算力/批改）
+    \end{itemize}
+    \vspace{1mm}
+    \textbf{\color{ink}数据安全}
+    \begin{itemize}\scriptsize\setlength\itemsep{0.2mm}
+      \item 原子写入 + 线程锁 \texttt{mutate()}
+      \item 文件名 \texttt{os.path.basename} 消毒
+      \item 用户隔离 \texttt{X-User-Id} 全链路
+    \end{itemize}
+    \column{0.48\textwidth}
+    \textbf{\color{ink}竞赛正确性审计}
+    \begin{itemize}\scriptsize\setlength\itemsep{0.2mm}
+      \item 所有权校验（上传/提交/重试）
+      \item 考试提交幂等 + 单次使用
+      \item 错题导出幂等（忽略批改失败）
+      \item SSRF 校验 + 重定向目标校验
+      \item 超时/熔断/fallback 覆盖
+    \end{itemize}
+    \vspace{1mm}
+    \textbf{\color{ink}近期稳定性修复}
+    \begin{itemize}\scriptsize\setlength\itemsep{0.2mm}
+      \item 竞态防护（AbortController）
+      \item Toast 定时器泄漏清理
+      \item localStorage 安全封装
+      \item 导航 sticky + 排序跳动修复
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+% ============================================================
+\section{总结与展望}
+% ============================================================
+
+\begin{frame}{总结与展望}
+  \vspace{2mm}
+  \begin{tcolorbox}[claudecard, title=已完成]
+    \small 资源感知 LLM 路由 · SM-2 自适应 · 考试风格克隆 · 全题型 LLM 批改 · 算力中心可视化 · 中英文双语 · 已部署运行
+  \end{tcolorbox}
+  \vspace{4mm}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \textbf{\color{ink}创新点回顾}
+    \begin{itemize}\small
+      \item \textcolor{coral}{资源感知路由}：算力网使能的 AI 应用
+      \item \textcolor{coral}{降级容错}：无 GPU 仍可用
+      \item \textcolor{coral}{路由证据可见}：非黑盒
+      \item \textcolor{coral}{全题型深度反馈}
+    \end{itemize}
+    \column{0.48\textwidth}
+    \textbf{\color{ink}未来展望}
+    \begin{itemize}\small
+      \item 多模态题目（图/公式/手写）
+      \item GPU 本地推理接入（硬件验收后）
+      \item 分布式存储替代 JSON
+      \item 跨课程知识图谱
+      \item 更多算力平台适配
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+% ============================================================
+% 致谢
+% ============================================================
+\begin{frame}[plain]
+  \begin{tikzpicture}[remember picture, overlay]
+    \fill[ink] (current page.north west) rectangle (current page.south east);
+    \node[white] at (current page.center) {
+      \begin{minipage}{0.8\textwidth}\centering
+        {\Huge\bfseries 谢谢！}\\[6mm]
+        {\Large\color{ivoryWarm} 欢迎提问与演示}\\[10mm]
+        {\large\color{coral} Exam Cloner}\\[2mm]
+        {\small\color{slateLight} 王语诺 \;·\; 刘睿淇 \;·\; HKUST(GZ)}\\[2mm]
+        {\small\color{slateLight} gpunion.hkust-gz.edu.cn/apps/exam-clone/}
+      \end{minipage}
+    };
+  \end{tikzpicture}
+\end{frame}
+
+\end{document}

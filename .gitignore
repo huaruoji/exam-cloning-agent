@@ -48,3 +48,10 @@ logs/
 
 # Uploads
 uploads/
+presentation/main.nav
+presentation/main.snm
+presentation/main.aux
+presentation/main.fls
+presentation/main.fdb_latexmk
+presentation/main.log
+presentation/main.xdv
