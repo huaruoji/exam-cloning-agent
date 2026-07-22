@@ -329,6 +329,12 @@ async def compute_status() -> dict[str, Any]:
     latencies = [event["latency_ms"] for event in workload_events if event["outcome"] == "success"]
     summaries = [_provider_summary(provider) for provider in providers]
     success_rate = round(successful / (successful + failed), 4) if successful + failed else None
+    # "Cache hit" here means a workload was served without a model call: either a
+    # deterministic rule grade or a reused question-bank item. We expose it as a
+    # hit rate over total workload attempts (saved + model calls) so the Compute
+    # Center can show real resource savings rather than a placeholder zero.
+    total_workload = saved_count + successful + failed
+    cache_hit_rate = round(saved_count / total_workload, 4) if total_workload else 0.0
     system_status = (
         "healthy"
         if any(p["usable"] for p in summaries)
@@ -349,8 +355,8 @@ async def compute_status() -> dict[str, Any]:
         "degraded_operation_available": True,
         "providers": summaries,
         "success_rate": success_rate,
-        "cache_hit_rate": 0.0,
-        "cache_hits": 0,
+        "cache_hit_rate": cache_hit_rate,
+        "cache_hits": saved_count,
         "calls_saved": saved_count,
         "metrics": {
             "events_retained": len(events),
